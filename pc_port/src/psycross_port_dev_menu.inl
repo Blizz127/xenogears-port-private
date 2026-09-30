@@ -1,5 +1,6 @@
 /* SDL host side of the opt-in Port Dev Menu (port_dev_menu.c): keyboard
- * events (F8 open/close; arrows, Enter, Esc while open), the overlay, the
+ * events (F8 open/close; arrows (Left/Right step a numeric row), Enter, Esc
+ * while open), the overlay, the
  * persistent CHEATS marker and the host functions the menu drives.  The
  * controller side is polled from port 1's active pad in PsyX_pad.cpp
  * (psycross_pad_select.patch), so the menu works on exactly the pad the
@@ -62,6 +63,8 @@ static int PsyX_PortDevMenuHandleEvent(SDL_Event *event)
 		if (!pressed || event->key.repeat) return 1;
 		if (key == SDL_SCANCODE_UP) PcPort_DevMenuKey(PC_DEV_UP, 1);
 		else if (key == SDL_SCANCODE_DOWN) PcPort_DevMenuKey(PC_DEV_DOWN, 1);
+		else if (key == SDL_SCANCODE_LEFT) PcPort_DevMenuKey(PC_DEV_LEFT, 1);
+		else if (key == SDL_SCANCODE_RIGHT) PcPort_DevMenuKey(PC_DEV_RIGHT, 1);
 		else if (key == SDL_SCANCODE_RETURN || key == SDL_SCANCODE_KP_ENTER) PcPort_DevMenuKey(PC_DEV_ACCEPT, 1);
 		else if (key == SDL_SCANCODE_ESCAPE || key == SDL_SCANCODE_BACKSPACE) PcPort_DevMenuKey(PC_DEV_BACK, 1);
 		return 1;
@@ -73,7 +76,7 @@ static int PsyX_PortDevMenuHandleEvent(SDL_Event *event)
 static void PsyX_DevMenuDrawTextColor(const char* text, int x, int y, float r, float g, float b);
 
 /* Harness-only scripted menu keys (DEV_MENU_SPEC.md §9), inert unless set:
- * XENO_DEV_MENU_KEYS="present:KEY,..." with KEY one of F8 UP DOWN ENTER ESC
+ * XENO_DEV_MENU_KEYS="present:KEY,..." with KEY one of F8 UP DOWN LEFT RIGHT ENTER ESC
  * or SHOT=<name>, which saves the presented frame WITH the overlay to
  * $XENO_DEV_MENU_SHOT_DIR/<name>.bmp.  `present` counts overlay draws. */
 static void PsyX_DevMenuScript(int phase)
@@ -102,6 +105,8 @@ static void PsyX_DevMenuScript(int phase)
 			if (!strcmp(k, "F8")) PcPort_DevMenuKey(PC_DEV_OPEN, 1);
 			else if (!strcmp(k, "UP")) PcPort_DevMenuKey(PC_DEV_UP, 1);
 			else if (!strcmp(k, "DOWN")) PcPort_DevMenuKey(PC_DEV_DOWN, 1);
+			else if (!strcmp(k, "LEFT")) PcPort_DevMenuKey(PC_DEV_LEFT, 1);
+			else if (!strcmp(k, "RIGHT")) PcPort_DevMenuKey(PC_DEV_RIGHT, 1);
 			else if (!strcmp(k, "ENTER")) PcPort_DevMenuKey(PC_DEV_ACCEPT, 1);
 			else if (!strcmp(k, "ESC")) PcPort_DevMenuKey(PC_DEV_BACK, 1);
 			if (strncmp(k, "SHOT=", 5)) eprintinfo("[DEV_MENU] scripted %s at present %d\n", k, presents);

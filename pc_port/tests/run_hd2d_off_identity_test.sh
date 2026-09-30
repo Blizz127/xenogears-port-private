@@ -10,6 +10,7 @@
 #     A = pc_port/build_native/xeno-port as built
 #     B = A's link inputs + pc_port/tests/hd2d_off_identity_hooks.c, a
 #         pc_port/src/hd2d-style file that defines every hook, all off
+#         (HOOK 4 included, so B also runs the depth/coverage producer)
 #   lane mode (pc_port/src/hd2d defines hooks, e.g. the Codex lane):
 #     A = the build's link inputs WITHOUT any pc_port/src/hd2d object
 #     B = pc_port/build_native/xeno-port as built (the lane, left off)
@@ -61,7 +62,7 @@ if ! grep -q 'XENO_PRESENT_HASH_LOG' pc_port/extern/PsyCross/src/PsyX_main.cpp; 
     say "overall=NOT_RUN psycross_hd2d_hooks.patch not applied"; exit 2
 fi
 
-HOOKS="PcPort_Hd2dPostProcess PcPort_Hd2dTextureOverride PcPort_Hd2dSpriteBegin PcPort_Hd2dSpriteDraw PcPort_Hd2dSpriteEnd"
+HOOKS="PcPort_Hd2dPostProcess PcPort_Hd2dTextureOverride PcPort_Hd2dSpriteBegin PcPort_Hd2dSpriteDraw PcPort_Hd2dSpriteEnd PcPort_Hd2dFrameBuffers"
 defined_hooks() { nm --defined-only "$1" 2>/dev/null | awk '{print $3}' | grep -xE "$(echo $HOOKS | tr ' ' '|')" | sort | tr '\n' ' '; }
 MODE="${XENO_HD2D_OFF_TEST_MODE:-}"
 if [ -z "$MODE" ]; then
@@ -150,8 +151,9 @@ hooks_line=$(grep -a '\[hd2d-off-hooks\]' "$OUTDIR/run_B/run.log" 2>/dev/null | 
 if [ "$MODE" = test ]; then
     post=$(echo "$hooks_line" | sed -n 's/.*post=\([0-9]*\).*/\1/p')
     tex=$(echo "$hooks_line" | sed -n 's/.* tex=\([0-9]*\).*/\1/p')
-    if [ "${post:-0}" -eq 0 ] || [ "${tex:-0}" -eq 0 ]; then
-        say "FAIL the test hooks were not exercised (post=${post:-0} tex=${tex:-0})"; fail=1
+    fbv=$(echo "$hooks_line" | sed -n 's/.* buffers_valid=\([0-9]*\).*/\1/p')
+    if [ "${post:-0}" -eq 0 ] || [ "${tex:-0}" -eq 0 ] || [ "${fbv:-0}" -eq 0 ]; then
+        say "FAIL the test hooks were not exercised (post=${post:-0} tex=${tex:-0} buffers_valid=${fbv:-0})"; fail=1
     fi
 fi
 python3 pc_port/tests/hd2d_present_hash_compare.py "$OUTDIR/hash_A.txt" "$OUTDIR/hash_B.txt" \

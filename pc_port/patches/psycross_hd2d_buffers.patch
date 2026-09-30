@@ -1,0 +1,193 @@
+--- a/include/PsyX/PsyX_render.h
++++ b/include/PsyX/PsyX_render.h
+@@ -209,6 +209,22 @@
+ extern void			GR_SetClutSemiMode(int mode);
+ extern void			GR_SetOverrideTextureSize(int width, int height);
+ extern void			GR_SetHd2dUvRect(int on, const float* uv); /* _xeno_hd2d_hooks */
++
++/* _xeno_hd2d_buffers: HOOK 4 (depth + coverage) producer, in
++ * pc_port/src/psycross_hd2d_buffers.inl.  Every call site tests the weak
++ * PcPort_Hd2dFrameBuffers first: with no lane defining it, none runs. */
++struct PcPortHd2dBuffers;
++extern void			PcPort_Hd2dFrameBuffers(const struct PcPortHd2dBuffers* buffers) __attribute__((weak));
++extern void			PsyX_Hd2dTagSpritePacket(const void* packet);
++extern void			GR_Hd2dSceneBegin(void);
++extern void			GR_Hd2dClear(void);
++extern void			GR_Hd2dZeroRect(int x0, int y0, int x1, int y1);
++extern void			GR_Hd2dOtEntry(void);
++extern void			GR_Hd2dPrimOverridden(void);
++extern void			GR_Hd2dTagPrim(int firstVertex, int endVertex, int code, const void* packet);
++extern void			GR_Hd2dUploadTags(int numVertices);
++extern void			GR_Hd2dDrawSplitTags(int startVertex, int triangles);
++extern void			GR_Hd2dPresent(int path, int vramShown);
+ extern void			GR_SetTextureWindow(const RECT16* tw); /* _xeno_texwindow_decl: see build_port.sh */
+ extern void			GR_SetWireframe(int enable);
+ 
+--- a/src/PsyX_main.cpp
++++ b/src/PsyX_main.cpp
+@@ -1105,6 +1105,7 @@
+ 	GR_PresentVRAMDisplay(currentDispEnv.disp.x, currentDispEnv.disp.y,
+ 		currentDispEnv.disp.w, currentDispEnv.disp.h,
+ 		currentDispEnv.isrgb24, !g_GPUDisabledState);
++	if (PcPort_Hd2dFrameBuffers) GR_Hd2dPresent(1, 1); /* _xeno_hd2d_buffers: HOOK 4, flags 0 (no primitives) */
+ 	if (PcPort_Hd2dPostProcess) { int dw, dh; SDL_GL_GetDrawableSize(g_window, &dw, &dh); PcPort_Hd2dPostProcess(1, dw, dh); } /* _xeno_hd2d_hooks */
+ 	PsyX_PresentHashLog(1); /* _xeno_hd2d_hooks */
+ 	PsyX_RecordPresentedFrame();
+@@ -1143,6 +1144,7 @@
+ 	 * drawn at (0,256) under PutDispEnv(0,0), cleared and redrawn before it
+ 	 * is ever flipped to).  Keep the capture above (it is the VRAM contents),
+ 	 * but show what the display scans out at this vblank. */
++	int hd2dVramShown = 0; /* _xeno_hd2d_buffers */
+ 	if (g_xenoLastPresentFromVRAM &&
+ 		(activeDispEnv.disp.x != currentDispEnv.disp.x ||
+ 		 activeDispEnv.disp.y != currentDispEnv.disp.y))
+@@ -1150,9 +1152,11 @@
+ 		GR_PresentVRAMDisplay(currentDispEnv.disp.x, currentDispEnv.disp.y,
+ 			currentDispEnv.disp.w, currentDispEnv.disp.h,
+ 			currentDispEnv.isrgb24, !g_GPUDisabledState);
++		hd2dVramShown = 1;
+ 	}
+ 	g_xenoLastPresentFromVRAM = 0;
+ 
++	if (PcPort_Hd2dFrameBuffers) GR_Hd2dPresent(0, hd2dVramShown); /* _xeno_hd2d_buffers: HOOK 4 */
+ 	if (PcPort_Hd2dPostProcess) { int dw, dh; SDL_GL_GetDrawableSize(g_window, &dw, &dh); PcPort_Hd2dPostProcess(0, dw, dh); } /* _xeno_hd2d_hooks */
+ 	PsyX_PresentHashLog(0); /* _xeno_hd2d_hooks */
+ 	PsyX_RecordPresentedFrame();
+--- a/src/gpu/PsyX_GPU.cpp
++++ b/src/gpu/PsyX_GPU.cpp
+@@ -760,6 +760,8 @@
+ 	float uv[4] = { 0.0f, 0.0f, 1.0f, 1.0f };
+ 	if (!PcPort_Hd2dTextureOverride(tpage, clut, u0, v0, u1, v1, &texture, uv) || texture == 0)
+ 		return false;
++	if (PcPort_Hd2dFrameBuffers)
++		GR_Hd2dPrimOverridden(); /* _xeno_hd2d_buffers: coverage bit 8 */
+ 	memcpy(g_hd2dPendingUv, uv, sizeof(uv));
+ 	g_hd2dPendingOn = 1;
+ 	overrideTexture = texture;
+@@ -1000,6 +1002,8 @@
+ 	}
+ 
+ 	GR_DrawTriangles(split.startVertex, split.numVerts / 3);
++	if (PcPort_Hd2dFrameBuffers)
++		GR_Hd2dDrawSplitTags(split.startVertex, split.numVerts / 3); /* _xeno_hd2d_buffers: same batch, tag FBO */
+ 
+ 	if (split.debugText)
+ 		GR_PopDebugLabel();
+@@ -1122,7 +1126,10 @@
+ 		// force PGXP off
+ 		polyTag->pgxp_index = 0xFFFF;
+ #endif
++		const int hd2dFirst = g_vertexIndex; /* _xeno_hd2d_buffers */
+ 		ParsePrimitive(polyTag);
++		if (PcPort_Hd2dFrameBuffers)
++			GR_Hd2dTagPrim(hd2dFirst, g_vertexIndex, polyTag->code, polyTag);
+ 
+ 		GPUDrawSplit& lastSplit = g_splits[g_splitIndex];
+ 		lastSplit.numVerts = g_vertexIndex - lastSplit.startVertex;
+@@ -1145,7 +1152,11 @@
+ 				int primLength = 0;
+ 				while (currentPacket < endPacket)
+ 				{
++					const int hd2dFirst = g_vertexIndex; /* _xeno_hd2d_buffers */
+ 					primLength = ParsePrimitive(reinterpret_cast<P_TAG*>(currentPacket));
++					if (PcPort_Hd2dFrameBuffers)
++						GR_Hd2dTagPrim(hd2dFirst, g_vertexIndex, reinterpret_cast<P_TAG*>(currentPacket)->code,
++							reinterpret_cast<void*>(basePacket));
+ 					currentPacket += (primLength + P_LEN) * sizeof(u_int);
+ 				}
+ 
+@@ -1154,6 +1165,10 @@
+ 					eprinterr("did not output valid primitive or ptag length is not valid (diff=%d)\n", endPacket-currentPacket);
+ 				}
+ 			}
++			else if (PcPort_Hd2dFrameBuffers)
++			{
++				GR_Hd2dOtEntry(); /* _xeno_hd2d_buffers: an OT entry: depth counts OT slots */
++			}
+ 
+ 			GPUDrawSplit& lastSplit = g_splits[g_splitIndex];
+ 			lastSplit.numVerts = g_vertexIndex - lastSplit.startVertex;
+--- a/src/pad/PsyX_pad.cpp
++++ b/src/pad/PsyX_pad.cpp
+@@ -224,6 +224,8 @@
+ 				if (gc) {
+ 					if (!(padBits & 0x10)) menuBits |= 1u << 0;	/* up (D-pad or stick) */
+ 					if (!(padBits & 0x40)) menuBits |= 1u << 1;	/* down */
++					if (!(padBits & 0x80)) menuBits |= 1u << 6;	/* left: numeric dev menu rows (_xeno_hd2d_buffers) */
++					if (!(padBits & 0x20)) menuBits |= 1u << 7;	/* right */
+ 					if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_A)) menuBits |= 1u << 2;
+ 					if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_B)) menuBits |= 1u << 3;
+ 					if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_BACK)) menuBits |= 1u << 4;
+--- a/src/render/PsyX_render.cpp
++++ b/src/render/PsyX_render.cpp
+@@ -340,6 +340,12 @@
+ 
+ #endif
+ 
++/* _xeno_hd2d_buffers: HOOK 4 producer (depth + coverage), inert unless a lane
++ * defines PcPort_Hd2dFrameBuffers. */
++#if USE_OPENGL
++#include "../../../../src/psycross_hd2d_buffers.inl"
++#endif
++
+ #if defined(RENDERER_OGL) || defined(RENDERER_OGLES)
+ int GR_InitialiseGLContext(char* windowName, int fullscreen)
+ {
+@@ -518,6 +524,8 @@
+ #endif
+ 	glClear(GL_DEPTH_BUFFER_BIT);
+ 	glClear(GL_STENCIL_BUFFER_BIT);
++	if (PcPort_Hd2dFrameBuffers)
++		GR_Hd2dSceneBegin(); /* _xeno_hd2d_buffers */
+ #endif
+ 
+ 	GR_UpdateVRAM();
+@@ -937,6 +945,12 @@
+ 		source
+ 	};
+ 
++	/* _xeno_hd2d_buffers: with a lane linked the PSX programs also write the
++	 * HOOK 4 tag outputs (locations 1 and 2; the default framebuffer only
++	 * takes location 0, so the colour is unchanged). */
++	const int xenoHd2dTags = isPsxShader && PcPort_Hd2dFrameBuffers &&
++		XenoHd2dShaderSources(vs_list_psx, fs_list_psx, extra_vs_defines, extra_fs_defines);
++
+ 	const char** vs_list = isPsxShader ? vs_list_psx : vs_list_src;
+ 	const char** fs_list = isPsxShader ? fs_list_psx : fs_list_src;
+ 	const int vs_list_cnt = isPsxShader ? 4 : 3;
+@@ -975,6 +989,8 @@
+ #if USE_PGXP
+ 	glBindAttribLocation(program, a_zw, "a_zw");
+ #endif
++	if (xenoHd2dTags)
++		XenoHd2dBindProgramLocations(program); /* _xeno_hd2d_buffers */
+ 
+ 	glLinkProgram(program);
+ 	if(GR_Shader_CheckProgramStatus(program) == 0)
+@@ -1614,6 +1630,8 @@
+ #if USE_OPENGL
+ 	glClearColor(r / 255.0f, g / 255.0f, b / 255.0f, 1.0f);
+ 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
++	if (PcPort_Hd2dFrameBuffers)
++		GR_Hd2dClear(); /* _xeno_hd2d_buffers */
+ #endif
+ }
+ 
+@@ -2156,6 +2174,8 @@
+ 	if (scissorEnabled)
+ 		glEnable(GL_SCISSOR_TEST);
+ 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
++	if (PcPort_Hd2dFrameBuffers)
++		GR_Hd2dZeroRect(left, bottom, right, top); /* _xeno_hd2d_buffers: a VRAM copy is not a prim */
+ #endif
+ }
+ 
+@@ -2454,6 +2474,8 @@
+ 
+ #if USE_OPENGL
+ 	glBufferSubData(GL_ARRAY_BUFFER, 0, num_vertices * sizeof(GrVertex), vertices);
++	if (PcPort_Hd2dFrameBuffers)
++		GR_Hd2dUploadTags(num_vertices); /* _xeno_hd2d_buffers */
+ #else
+ #error
+ #endif

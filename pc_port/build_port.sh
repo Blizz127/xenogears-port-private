@@ -705,8 +705,15 @@ apply_psycross_patch "$ROOT/pc_port/patches/psycross_present_displayed_after_vra
 # at both present sites, HOOK 3 textured-primitive override, and the
 # XENO_PRESENT_HASH_LOG per-present CRC. Weak symbols: with no hd2d
 # definition linked, retail rendering is unchanged. Keep this after every
-# other PsyCross patch; generated against the tree they produce.
+# other PsyCross patch (but psycross_hd2d_buffers.patch, which follows it);
+# generated against the tree they produce.
 apply_psycross_patch "$ROOT/pc_port/patches/psycross_hd2d_hooks.patch" "_xeno_hd2d_hooks"
+# HD-2D HOOK 4 (PcPort_Hd2dFrameBuffers: per-frame OT-slot depth + coverage
+# buffers, producer in pc_port/src/psycross_hd2d_buffers.inl) and the dev
+# menu's Left/Right pad bits for numeric enhancement rows. Weak symbol: with
+# no lane defining the hook nothing is allocated, bound or drawn. Right after
+# the hooks patch; generated against the tree it produces.
+apply_psycross_patch "$ROOT/pc_port/patches/psycross_hd2d_buffers.patch" "_xeno_hd2d_buffers"
 # HD-2D lane PsyCross patches: every pc_port/patches/hd2d/*.patch, in
 # byte-sorted order, after all patches above. A patch is skipped when its
 # own sentinel -- the literal comment `/* _hd2d_<basename> */` (basename

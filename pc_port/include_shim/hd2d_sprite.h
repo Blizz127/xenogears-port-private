@@ -27,7 +27,54 @@
  *   mode (ABR 0 = 50/50); texels with alpha < 0.5 are cut out as retail
  *   texel 0 is. Cost: one draw split (batch break + bind) per overridden run.
  *
- * Menu: PcPort_DevMenuRegisterEnhancement (pc_port/src/port_dev_menu.h). */
+ * HOOK 4  depth + coverage (PsyCross, psycross_hd2d_buffers.patch and
+ *         pc_port/src/psycross_hd2d_buffers.inl)
+ *   void PcPort_Hd2dFrameBuffers(const PcPortHd2dBuffers *buffers);
+ *   Called at both present sites just before HOOK 1 (path 0 PsyX_EndScene,
+ *   path 1 PsyX_PresentDisplayFromVRAM), with the buffers of the frame about
+ *   to be presented. Like HOOK 1: restore every GL state the hook touches;
+ *   the textures are owned by PsyCross (sample them, never delete or resize
+ *   them); both are valid until the next scene begins.
+ *   depth_tex: GL_R16 (16-bit normalized: sample .r * 65535.0 and round;
+ *     R16UI would force usampler2D on every lane shader and integer clears
+ *     in PsyCross's float-sampler GL 3.3 path). Drawable size, GL window
+ *     orientation (row 0 at the bottom, as glReadPixels of the frame).
+ *     Per pixel: the OT slot, in draw order, of the last primitive whose
+ *     fragment was written there this frame. Exact mapping: every
+ *     zero-length packet the frame's DrawOTag walks (an ordering-table
+ *     entry; ClearOTag/ClearOTagR and the field's own clear make them) is
+ *     counted, starting at 0 at the scene's first draw; a primitive drawn
+ *     after the n-th counted entry has depth max(n, 1), clamped to 65535.
+ *     So depth 1..depth_max, larger = drawn later = nearer (in a reverse OT
+ *     cleared with n entries and walked from &ot[n-1], ot[i] is counted
+ *     n - i entries after the walk start; OTs linked into a slot of another
+ *     OT count inside it; several DrawOTag calls in a frame keep counting).
+ *     DrawPrim (no OT) uses the current count, at least 1. 0 = no primitive
+ *     wrote the pixel this frame: background, ClearImage / isbg fills, and
+ *     VRAM copies into the frame (MoveImage), which reset the area to 0.
+ *   depth_max: the number of entries counted this frame (clamped to 65535),
+ *     the largest depth a pixel can carry.
+ *   coverage_tex: GL_R8 (normalized: sample .r * 255.0 and round), same
+ *     size and orientation; per pixel the PC_PORT_HD2D_COVER_* bits of that
+ *     same last primitive (0 where depth is 0):
+ *       1 = HOOK 2 sprite part: a func_8001E3D8 part packet (every field
+ *           actor sprite part, drawn by retail, the built-in Fei path, or
+ *           linked by PcPort_Hd2dSpriteDraw at the part's slot),
+ *       2 = textured polygon (3D models, map),
+ *       4 = untextured polygon, line, or TILE/SPRT (2D UI, overlays),
+ *       8 = drawn with a HOOK 3 PcPort_Hd2dTextureOverride texture.
+ *   flags: bit0 depth valid, bit1 coverage valid; 0 on path 1 (no
+ *     primitives) and on a path-0 present that showed the VRAM display.
+ *   Cost: only while a lane defines this hook (weak-symbol test at every
+ *   site): with it, each draw batch is drawn a second time into an FBO
+ *   (same program, vertices and state; blending off), the PSX programs
+ *   gain two outputs, and two textures, a depth/stencil buffer and a tag
+ *   VBO are allocated. Without it nothing is created, bound or drawn.
+ *
+ * Menu: PcPort_DevMenuRegisterEnhancement (toggle rows) and
+ *   PcPort_DevMenuRegisterEnhancementValue (numeric rows "LABEL: <value>
+ *   <unit>", Left/Right step, Confirm wraps, saved in config.ini under
+ *   [enhancements]) in pc_port/src/port_dev_menu.h. */
 #ifndef PC_PORT_HD2D_SPRITE_H
 #define PC_PORT_HD2D_SPRITE_H
 #ifdef __cplusplus
@@ -66,6 +113,20 @@ int PcPort_Hd2dSpriteDraw(const PcPortHd2dSpriteInfo* info, int part, const PcPo
 void PcPort_Hd2dSpriteEnd(const PcPortHd2dSpriteInfo* info);
 
 void PcPort_Hd2dPostProcess(int path, int drawable_w, int drawable_h);
+
+/* HOOK 4 (see top). */
+typedef struct PcPortHd2dBuffers { unsigned depth_tex, coverage_tex; int width, height; unsigned flags; unsigned depth_max; } PcPortHd2dBuffers;
+enum {
+    PC_PORT_HD2D_BUFFERS_DEPTH = 1u << 0,
+    PC_PORT_HD2D_BUFFERS_COVERAGE = 1u << 1
+};
+enum {
+    PC_PORT_HD2D_COVER_SPRITE = 1,
+    PC_PORT_HD2D_COVER_TEXTURED = 2,
+    PC_PORT_HD2D_COVER_FLAT_2D = 4,
+    PC_PORT_HD2D_COVER_OVERRIDE = 8
+};
+void PcPort_Hd2dFrameBuffers(const PcPortHd2dBuffers* buffers);
 int PcPort_Hd2dTextureOverride(int tpage, int clut, int u0, int v0, int u1, int v1,
                                unsigned int* out_gl_texture, float out_uv[4]);
 

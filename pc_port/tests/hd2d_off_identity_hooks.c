@@ -3,6 +3,9 @@
  * port makes (SpriteBegin says yes, so every sprite part is handed to
  * SpriteDraw with its RetailQuad filled), then declines to draw, so the
  * presented frames must be bit-identical to a build without the lane.
+ * Defining HOOK 4 (PcPort_Hd2dFrameBuffers) also runs PsyCross's depth/
+ * coverage producer (a second pass into its own FBO) on every frame, which
+ * must not change a presented pixel either.
  * Call counts go to stderr so the test can prove the hooks really ran.
  * -DHD2D_OFF_TEST_MUTANT (XENO_HD2D_OFF_TEST_MUTANT=1) makes the post-process
  * hook paint one 4x4 corner block, a control that the gate must FAIL. */
@@ -13,14 +16,15 @@
 #include "hd2d_sprite.h"
 #include "port_dev_menu.h"
 
-static unsigned long s_post, s_tex, s_begin, s_draw, s_end;
+static unsigned long s_post, s_tex, s_begin, s_draw, s_end, s_fb, s_fbValid;
 static unsigned int s_idMix;
 static int s_on; /* the enhancement's switch: always off in this test */
 
 static void Report(void)
 {
-    fprintf(stderr, "[hd2d-off-hooks] post=%lu tex=%lu sprite_begin=%lu sprite_draw=%lu sprite_end=%lu idmix=%08x\n",
-            s_post, s_tex, s_begin, s_draw, s_end, s_idMix);
+    fprintf(stderr, "[hd2d-off-hooks] post=%lu tex=%lu sprite_begin=%lu sprite_draw=%lu sprite_end=%lu idmix=%08x"
+            " buffers=%lu buffers_valid=%lu\n",
+            s_post, s_tex, s_begin, s_draw, s_end, s_idMix, s_fb, s_fbValid);
 }
 
 void PcPort_Hd2dPostProcess(int path, int drawable_w, int drawable_h)
@@ -73,6 +77,12 @@ void PcPort_Hd2dSpriteEnd(const PcPortHd2dSpriteInfo *info)
 {
     (void)info;
     s_end++;
+}
+
+void PcPort_Hd2dFrameBuffers(const PcPortHd2dBuffers *b)
+{
+    s_fb++;
+    if (b->flags == 3 && b->depth_tex && b->coverage_tex) s_fbValid++;
 }
 
 static int Get(void) { return s_on; }

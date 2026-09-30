@@ -32,6 +32,11 @@
 #pragma weak PcPort_Hd2dSpriteBegin
 #pragma weak PcPort_Hd2dSpriteDraw
 #pragma weak PcPort_Hd2dSpriteEnd
+/* HOOK 4 (psycross_hd2d_buffers.patch): sprite part packets get coverage
+ * bit 1 while a lane defines PcPort_Hd2dFrameBuffers. */
+#pragma weak PcPort_Hd2dFrameBuffers
+extern void PsyX_Hd2dTagSpritePacket(const void *packet);
+#pragma weak PsyX_Hd2dTagSpritePacket
 
 extern unsigned int GR_CreateRGBATexture(int, int, unsigned char *);
 extern void *g_GfxCurWorkBuffer, *g_GfxCurWorkBufferEnd;
@@ -215,6 +220,17 @@ static int Hd2dSpriteDraw(PcPortFeiHd2dBatch *b, void *poly, void *ot)
     q.clut = p->clut;
     q.ot = ot;
     q.poly = poly;
+    if (PcPort_Hd2dFrameBuffers && PsyX_Hd2dTagSpritePacket) {
+        /* the lane links its own packets at the slot: tag those too (OT
+         * insertion prepends, so they run from the new head to the old) */
+        u32 before = *(u32 *)ot & 0xFFFFFF, link;
+        int n;
+        if (!PcPort_Hd2dSpriteDraw(&b->info, part, &q)) return 0;
+        for (link = *(u32 *)ot & 0xFFFFFF, n = 0; link && link != before && link != 0xFFFFFF && n < 64;
+             link = *(u32 *)(uintptr_t)link & 0xFFFFFF, n++)
+            PsyX_Hd2dTagSpritePacket((const void *)(uintptr_t)link);
+        return 1;
+    }
     return PcPort_Hd2dSpriteDraw(&b->info, part, &q) != 0;
 }
 
@@ -307,6 +323,8 @@ void PcPort_FeiHd2dBegin(PcPortFeiHd2dBatch *b, void *sprite, int parts)
 
 int PcPort_FeiHd2dCapture(PcPortFeiHd2dBatch *b, void *poly, void *ot)
 {
+    /* the retail part packet (also reused by the Fei path below) */
+    if (PcPort_Hd2dFrameBuffers && PsyX_Hd2dTagSpritePacket) PsyX_Hd2dTagSpritePacket(poly);
     if (b->hookState && Hd2dSpriteDraw(b, poly, ot)) return 1;
     if (!b->active || b->count >= 64) return 0;
     b->prims[b->count] = poly;
