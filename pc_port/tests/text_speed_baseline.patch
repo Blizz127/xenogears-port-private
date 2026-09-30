@@ -1,0 +1,92 @@
+--- a/src/field/dialogue/text_box_render.c	2026-09-30 16:54:14.551156236 +0000
++++ b/src/field/dialogue/text_box_render.c	2026-09-30 16:54:14.597190082 +0000
+@@ -736,20 +736,12 @@
+ #ifndef XENO_PC_PORT
+ INCLUDE_ASM("asm/field/nonmatchings/dialogue/text_box_render", func_8008004C);
+ #else
+-/* Opt-in AUTO-ADVANCE hook (pc_port/src/text_speed.c) and the dialogue-state
+- * log (pc_port/src/text_diag.c, TEST TOOLING); weak, absent = retail. */
+-extern s32 PcPort_TextAutoAdvanceFrame(void) __attribute__((weak));
+ extern void PcPort_TextDiagFrame(void) __attribute__((weak));
+ void func_8008004C(void* ot, s32 renderContextIndex) {
+     s32 skipIndex;
+     s32 orders[4];
+     s32 order;
+     s32 i;
+-    /* PORT ENHANCEMENT SEAM (opt-in AUTO-ADVANCE, pc_port/src/text_speed.c):
+-     * bit i set = box i has shown a plain-confirm page for the configured
+-     * delay; the ordered pass below then takes the retail confirm branch for
+-     * it, exactly as a Circle release would. Hook absent or setting off: 0. */
+-    s32 xenoAutoConfirm = PcPort_TextAutoAdvanceFrame ? PcPort_TextAutoAdvanceFrame() : 0;
+ 
+     D_800ADE98++;
+     if ((D_800ADE98 & 3) == 0) {
+@@ -824,7 +816,7 @@
+ 
+             *(s16*)(pTextBox + 0x3C4) = -1;
+             if (*(s16*)(pTextBox + 0x408) == 0) {
+-                if (((D_800C2694 & 0x20) != 0 || ((xenoAutoConfirm >> i) & 1) != 0) && order == 0) {
++                if ((D_800C2694 & 0x20) != 0 && order == 0) {
+                     s32 actorIndex = *(s16*)(pTextBox + 0x416);
+                     ActorData* pActor = (ActorData*)(uintptr_t)g_FieldActors[actorIndex].pActorData;
+ 
+@@ -859,8 +851,6 @@
+     }
+ 
+     FieldTextBoxLinkPrim(ot, D_800B1DF4 + g_FieldCurRenderContextIndex * 0xC0);
+-    /* TEST TOOLING (pc_port/src/text_diag.c, inert unless XENO_TEXT_DIAG):
+-     * per-frame dialogue-state log after every box has ticked. */
+     if (PcPort_TextDiagFrame) {
+         PcPort_TextDiagFrame();
+     }
+--- a/src/slus_006.64/system/system.c	2026-09-30 16:54:14.563426948 +0000
++++ b/src/slus_006.64/system/system.c	2026-09-30 16:54:14.567586977 +0000
+@@ -1039,8 +1039,6 @@
+ #ifndef XENO_PC_PORT
+ INCLUDE_ASM("asm/slus_006.64/nonmatchings/system/system", func_80034888);
+ #else
+-/* Opt-in TEXT SPEED hook (pc_port/src/text_speed.c); weak, absent = retail. */
+-extern s32 PcPort_TextRevealTicks(void* window) __attribute__((weak));
+ void func_80034888(void* arg0, void* ot, s32 renderContextIndex) {
+     u8* pWindow = arg0;
+     u16 flags;
+@@ -1165,31 +1163,15 @@
+ 
+     if (*(s16*)(pWindow + 0x84) != 0) {
+         *(s16*)(pWindow + 0x84) -= 1;
++    } else if (*(s16*)(pWindow + 0x86) != 0) {
++        *(s16*)(pWindow + 0x86) -= 1;
+     } else {
+-        /* PORT ENHANCEMENT SEAM (opt-in TEXT SPEED, pc_port/src/text_speed.c).
+-         * Retail runs the reveal tick below once per frame. The weak hook may
+-         * ask for more ticks this frame for a field dialogue window; each
+-         * extra tick is the same retail tick (per-glyph delay countdown, or
+-         * one func_80033DF0 call plus its row upload) and they stop at the
+-         * first explicit delay (+0x84), wait/page-clear flag (0x58) or string
+-         * end (0x4 cleared), exactly where retail's next frame would stop.
+-         * Hook absent or setting off: ticks == 1, the loop body runs once and
+-         * the condition is never evaluated -- retail's single tick. */
+-        s32 ticks = PcPort_TextRevealTicks ? PcPort_TextRevealTicks(pWindow) : 1;
+-
+-        do {
+-            if (*(s16*)(pWindow + 0x86) != 0) {
+-                *(s16*)(pWindow + 0x86) -= 1;
+-            } else {
+-                *(s16*)(pWindow + 0x86) = *(s16*)(pWindow + 0x88);
+-                if ((*(u16*)(pWindow + 0x10) & 0x58) == 0) {
+-                    func_80033DF0(pWindow);
+-                    LoadImage((RECT*)(pRows + *(s16*)(pWindow + 0x02) * 0x60 + 0x50),
+-                              (u_long*)(uintptr_t)*(u32*)(pWindow + 0x2C));
+-                }
+-            }
+-        } while (--ticks > 0 && *(s16*)(pWindow + 0x84) == 0 &&
+-                 (*(u16*)(pWindow + 0x10) & 0x58) == 0 && (*(u16*)(pWindow + 0x10) & 0x4) != 0);
++        *(s16*)(pWindow + 0x86) = *(s16*)(pWindow + 0x88);
++        if ((*(u16*)(pWindow + 0x10) & 0x58) == 0) {
++            func_80033DF0(pWindow);
++            LoadImage((RECT*)(pRows + *(s16*)(pWindow + 0x02) * 0x60 + 0x50),
++                      (u_long*)(uintptr_t)*(u32*)(pWindow + 0x2C));
++        }
+     }
+ 
+     if (*(s16*)(pWindow + 0x84) != 0) {
