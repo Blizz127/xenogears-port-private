@@ -9,6 +9,11 @@ set -u
 cd /xenogears-decomp
 mkdir -p out
 BIN=pc_port/build_native/xeno-port
+# the runner ships no build/ or asm/: the port build needs the matching ELFs
+# (battle bridge map), so run the matching build first (as rom-check does)
+if [ ! -f build/out/slus_006.64.elf ]; then
+    make build NUMPROC=4 > out/build_matching.log 2>&1 || { echo "matching build failed"; tail -30 out/build_matching.log; exit 1; }
+fi
 if [ ! -x out/xeno-port-enhanced ]; then
     bash pc_port/build_port.sh > out/build_enhanced.log 2>&1 || { echo "enhanced build failed"; tail -30 out/build_enhanced.log; exit 1; }
     cp $BIN out/xeno-port-enhanced
