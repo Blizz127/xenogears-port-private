@@ -162,6 +162,28 @@ int main() {
     assert(!std::memcmp(&rendered[(2*W+2)*4],&baseline[(2*W+2)*4],4)); // nearest distance0
     assert(std::memcmp(&rendered[(2*W+10)*4],&baseline[(2*W+10)*4],4)); // far ordinal
     assert(!std::memcmp(&rendered[(2*W+20)*4],&baseline[(2*W+20)*4],4)); // invalid slot0
+    // Particle units must be explicit; raw maximum slot admits proxy z=0.
+    c.effect[XG_HD2D_FOG].enabled=0; c.effect[XG_HD2D_PARTICLES]={1,1};
+    f.particles[0]={.32f,.32f,0,.6f};
+    assert(!(XgHd2d_Plan(&c,&f).active&bit(XG_HD2D_PARTICLES)));
+    f.particle_mode=XG_HD2D_PARTICLE_OT_ORDER;
+    gray();assert(XgHd2d_Present(&c,&f)==1);rendered=pixels();
+    assert(std::memcmp(&rendered[(2*W+2)*4],&baseline[(2*W+2)*4],4));
+    for(int k=0;k<4;++k) assert(!std::memcmp(&rendered[((6+k)*W+14)*4],&baseline[((6+k)*W+14)*4],4));
+    f.particles[0].z=.5f;
+    gray();assert(XgHd2d_Present(&c,&f)==1);rendered=pixels();
+    assert(!std::memcmp(&rendered[(2*W+2)*4],&baseline[(2*W+2)*4],4)); // nearer map occludes
+    assert(std::memcmp(&rendered[(7*W+10)*4],&baseline[(7*W+10)*4],4)); // farther map admits
+    for(float invalid : {-0.1f,1.1f}) {
+        f.particles[0].z=invalid; assert(!(XgHd2d_Plan(&c,&f).active&bit(XG_HD2D_PARTICLES)));
+        gray();assert(XgHd2d_Present(&c,&f)==0);assert(pixels()==baseline);
+    }
+    f.particles[0].z=.5f;
+    f.linear_depth_verified=0;assert(!(XgHd2d_Plan(&c,&f).active&bit(XG_HD2D_PARTICLES)));
+    f.linear_depth_verified=1;f.protection_verified=0;
+    assert(!(XgHd2d_Plan(&c,&f).active&bit(XG_HD2D_PARTICLES)));f.protection_verified=1;
+    f.depth_mode=XG_HD2D_DEPTH_LINEAR;
+    assert(!(XgHd2d_Plan(&c,&f).active&bit(XG_HD2D_PARTICLES)));f.depth_mode=XG_HD2D_DEPTH_OT_ORDER;
     // Full drawable attachments sampled at exact viewport offset, not local0.
     f.x=4;f.y=3;f.width=16;f.height=12;f.auxiliary_width=W;f.auxiliary_height=H;
     for(int e=0;e<XG_HD2D_EFFECT_COUNT;++e)c.effect[e].enabled=0;

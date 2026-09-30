@@ -20,6 +20,10 @@ typedef enum XgHd2dProtectionMode {
     XG_HD2D_PROTECTION_BINARY = 0,
     XG_HD2D_PROTECTION_COVERAGE_BITS = 1 /* R8 byte: sprite1/map2/UI4/override8 */
 } XgHd2dProtectionMode;
+typedef enum XgHd2dParticleMode {
+    XG_HD2D_PARTICLE_LINEAR = 0, /* positive physical view distance */
+    XG_HD2D_PARTICLE_OT_ORDER = 1 /* dimensionless 1-scaled raw OT slot, [0,1] */
+} XgHd2dParticleMode;
 typedef struct XgHd2dControl { int enabled; float intensity; } XgHd2dControl;
 typedef struct XgHd2dConfig {
     int enabled; /* zero means no GL calls, queries, or allocations */
@@ -36,6 +40,7 @@ typedef struct XgHd2dConfig {
 /* All positions: normalized game viewport coordinates, origin lower left.
  * Point light: x,y,radius,strength. Shadow: foot x,y,radius x,radius y.
  * Particle: x,y,positive linear view depth,radius in normalized viewport.
+ * Explicit OT particle mode permits z in [0,1], including nearest zero.
  * All items must be projected from the current scene; no guessed actor feet. */
 typedef struct XgHd2dItem { float x, y, z, w; } XgHd2dItem;
 typedef struct XgHd2dFrame {
@@ -60,6 +65,7 @@ typedef struct XgHd2dFrame {
     /* OT raw normalized texel multiplied by this positive scale then clamped
      * to [0,1]. Use 1 for full-range encoding, 65535/ot_max for raw slot codes. */
     float order_scale;
+    XgHd2dParticleMode particle_mode; /* explicit units; never inferred from depth_mode */
 } XgHd2dFrame;
 typedef struct XgHd2dPlan {
     uint32_t active, missing_depth, missing_protection;

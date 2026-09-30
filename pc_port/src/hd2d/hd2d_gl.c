@@ -107,12 +107,15 @@ static bool textureValid(GLuint texture,GLint format,int width,int height) {
     return w==width && h==height && f==format;
 }
 static void scalar(const char *name,int v) { glUniform1i(glGetUniformLocation(program,name),v); }
-static void items(const char *name,const char *countName,const XgHd2dItem *items,unsigned count) {
+static void items(const char *name,const char *countName,const XgHd2dItem *items,unsigned count,int particleMode) {
     XgHd2dItem valid[XG_HD2D_MAX_ITEMS]; int n=0;
     if(count<=XG_HD2D_MAX_ITEMS) for(unsigned i=0;i<count;++i) {
         const XgHd2dItem v=items[i];
         if(isfinite(v.x) && isfinite(v.y) && isfinite(v.z) &&
-           isfinite(v.w) && v.z>0 && v.w>0) valid[n++]=v;
+           isfinite(v.w) && v.w>0 &&
+           (particleMode<0 ? v.z>0 :
+            (v.x>=0 && v.x<=1 && v.y>=0 && v.y<=1 &&
+             (particleMode==XG_HD2D_PARTICLE_OT_ORDER ? v.z>=0 && v.z<=1 : v.z>0)))) valid[n++]=v;
     }
     scalar(countName,n);
     if(n) glUniform4fv(glGetUniformLocation(program,name),n,&valid[0].x);
@@ -168,9 +171,9 @@ int XgHd2d_Present(const XgHd2dConfig *config,const XgHd2dFrame *frame) {
     glUniform2f(glGetUniformLocation(program,"fogRange"),
         frame->depth_mode==XG_HD2D_DEPTH_OT_ORDER?config->order_fog_start:config->fog_start,
         frame->depth_mode==XG_HD2D_DEPTH_OT_ORDER?config->order_fog_end:config->fog_end);
-    items("lights","lightCount",frame->lights,frame->light_count);
-    items("shadows","shadowCount",frame->shadows,frame->shadow_count);
-    items("particles","particleCount",frame->particles,frame->particle_count);
+    items("lights","lightCount",frame->lights,frame->light_count,-1);
+    items("shadows","shadowCount",frame->shadows,frame->shadow_count,-1);
+    items("particles","particleCount",frame->particles,frame->particle_count,frame->particle_mode);
     glViewport(frame->x,frame->y,frame->width,frame->height);
     glDrawArrays(GL_TRIANGLES,0,3); errorText[0]=0; result=1;
 done:

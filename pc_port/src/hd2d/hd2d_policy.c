@@ -48,13 +48,27 @@ XgHd2dPlan XgHd2d_Plan(const XgHd2dConfig *c, const XgHd2dFrame *f)
         if (!isfinite(c->order_fog_start) || !isfinite(c->order_fog_end) ||
             c->order_fog_start<0 || c->order_fog_end>1 || c->order_fog_end<=c->order_fog_start)
             p.active &= ~BIT(XG_HD2D_FOG);
-        /* Projected particles currently carry physical positive view depth. */
-        p.active &= ~BIT(XG_HD2D_PARTICLES);
+        if (f->particle_mode!=XG_HD2D_PARTICLE_OT_ORDER)
+            p.active &= ~BIT(XG_HD2D_PARTICLES);
     } else {
         if (!isfinite(c->focus_depth) || !isfinite(c->focus_range) || !isfinite(c->focus_tilt) ||
             c->focus_depth<=0 || c->focus_range<=0) p.active &= ~BIT(XG_HD2D_DOF);
         if (!isfinite(c->fog_start) || !isfinite(c->fog_end) ||
             c->fog_start<0 || c->fog_end<=c->fog_start) p.active &= ~BIT(XG_HD2D_FOG);
+    }
+    if ((f->depth_mode==XG_HD2D_DEPTH_LINEAR && f->particle_mode!=XG_HD2D_PARTICLE_LINEAR) ||
+        (f->particle_mode!=XG_HD2D_PARTICLE_LINEAR && f->particle_mode!=XG_HD2D_PARTICLE_OT_ORDER))
+        p.active &= ~BIT(XG_HD2D_PARTICLES);
+    /* Invalid particles are individually rejected; no implicit unit conversion. */
+    if (p.active & BIT(XG_HD2D_PARTICLES)) {
+        unsigned valid=0;
+        if (f->particle_count<=XG_HD2D_MAX_ITEMS) for (i=0;i<f->particle_count;++i) {
+            XgHd2dItem v=f->particles[i];
+            if (isfinite(v.x) && isfinite(v.y) && isfinite(v.z) && isfinite(v.w) &&
+                v.x>=0 && v.x<=1 && v.y>=0 && v.y<=1 && v.w>0 &&
+                (f->particle_mode==XG_HD2D_PARTICLE_OT_ORDER ? v.z>=0 && v.z<=1 : v.z>0)) ++valid;
+        }
+        if (!valid) p.active &= ~BIT(XG_HD2D_PARTICLES);
     }
     if (f->shadow_count == 0 || f->shadow_count > XG_HD2D_MAX_ITEMS) p.active &= ~BIT(XG_HD2D_SHADOW);
     if (f->particle_count == 0 || f->particle_count > XG_HD2D_MAX_ITEMS) p.active &= ~BIT(XG_HD2D_PARTICLES);

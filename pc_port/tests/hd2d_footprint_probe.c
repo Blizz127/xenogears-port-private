@@ -7,6 +7,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include "hd2d_footprint_alpha.h"
+#include "hd2d_footprint_cell.h"
+#include "field/actor.h"
+#include <stdint.h>
+extern int g_FieldNumActors;
 extern unsigned g_PcPortPresentedFrames;
 extern int g_PlayerActorIndex;
 static FILE *parts;
@@ -33,6 +37,15 @@ static void configure(void) {
     expected_frame=parameter("XENO_HD2D_FOOTPRINT_FRAME",190,0,32767);
     expected_parts=parameter("XENO_HD2D_FOOTPRINT_PARTS",6,1,64);
     expected_fnv=(unsigned)parameter("XENO_HD2D_FOOTPRINT_FNV",0xdb7d0105u,0,0xfffffffful);
+}
+static int legacy_cell(const PcPortHd2dSpriteInfo *i) {
+    ActorData *a;
+    unsigned short angle;
+    if(!i || !i->sprite || !g_FieldActors || i->actor<0 || i->actor>=g_FieldNumActors ||
+       (uintptr_t)i->sprite!=g_FieldActors[i->actor].pSpriteData || !g_FieldActors[i->actor].pActorData)return -1;
+    a=(ActorData*)(uintptr_t)g_FieldActors[i->actor].pActorData;
+    memcpy(&angle,(const unsigned char*)i->sprite+0x80,sizeof angle);
+    return Hd2dFootprintLegacyCell(angle,i->frame,a->curAnimationId,1);
 }
 static float alpha_box[4];
 static int mode(void) { return ((g_PcPortPresentedFrames+1)/8)%3; }
@@ -75,8 +88,10 @@ int __wrap_PcPort_Hd2dSpriteDraw(const PcPortHd2dSpriteInfo *i,int part,const Pc
     int exact=!memcmp(&before,&after,sizeof before) && !memcmp(&original,q,sizeof original);
     if(!exact) fail("retail packet or OT argument changed");
     if(!parts) { const char *path=getenv("XENO_HD2D_FOOTPRINT_PART_LOG"); if(!path || !(parts=fopen(path,"w"))) { fail("cannot open lane part log"); return r; } }
-    fprintf(parts,"present=%u mode=1 cell=0 part=%d ot=%lx quad=%d,%d,%d,%d,%d,%d,%d,%d fnv=%08x frame=%d actor=%d accepted=1 packet_exact=%d\n",
-        g_PcPortPresentedFrames+1,part,(unsigned long)q->ot,q->x[0],q->y[0],q->x[1],q->y[1],q->x[2],q->y[2],q->x[3],q->y[3],i->identity,i->frame,i->actor,exact);
+    int cell=legacy_cell(i);
+    if(cell<0)fail("invalid legacy diagnostic cell metadata");
+    fprintf(parts,"present=%u mode=1 cell=%d part=%d ot=%lx quad=%d,%d,%d,%d,%d,%d,%d,%d fnv=%08x frame=%d actor=%d accepted=1 packet_exact=%d\n",
+        g_PcPortPresentedFrames+1,cell,part,(unsigned long)q->ot,q->x[0],q->y[0],q->x[1],q->y[1],q->x[2],q->y[2],q->x[3],q->y[3],i->identity,i->frame,i->actor,exact);
     if(part<0 || part>=expected_parts) fail("accepted part outside exact requested set");
     else {
         unsigned long long bit=1ull<<part;
