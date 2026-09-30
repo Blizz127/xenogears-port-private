@@ -21,8 +21,10 @@ fi
 if [[ " $* " == *" identity "* && ! -x out/xeno-port-baseline ]]; then
     patch -p1 < pc_port/tests/text_speed_baseline.patch > out/baseline_patch.log 2>&1 || { echo "baseline patch failed"; exit 1; }
     sed -i '/pc_port\/src\/text_speed.c/d' pc_port/build_port.sh
+    mv pc_port/src/text_speed.c out/text_speed.c.off
     bash pc_port/build_port.sh > out/build_baseline.log 2>&1 || { echo "baseline build failed"; tail -30 out/build_baseline.log; exit 1; }
     cp $BIN out/xeno-port-baseline
+    mv out/text_speed.c.off pc_port/src/text_speed.c
     patch -R -p1 < pc_port/tests/text_speed_baseline.patch >> out/baseline_patch.log 2>&1
 fi
 export XENO_TEST_TMP=/xenogears-decomp/out/runs
