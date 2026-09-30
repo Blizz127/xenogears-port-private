@@ -736,11 +736,20 @@ void func_8007FFE8(void) {
 #ifndef XENO_PC_PORT
 INCLUDE_ASM("asm/field/nonmatchings/dialogue/text_box_render", func_8008004C);
 #else
+/* Opt-in AUTO-ADVANCE hook (pc_port/src/text_speed.c) and the dialogue-state
+ * log (pc_port/src/text_diag.c, TEST TOOLING); weak, absent = retail. */
+extern s32 PcPort_TextAutoAdvanceFrame(void) __attribute__((weak));
+extern void PcPort_TextDiagFrame(void) __attribute__((weak));
 void func_8008004C(void* ot, s32 renderContextIndex) {
     s32 skipIndex;
     s32 orders[4];
     s32 order;
     s32 i;
+    /* PORT ENHANCEMENT SEAM (opt-in AUTO-ADVANCE, pc_port/src/text_speed.c):
+     * bit i set = box i has shown a plain-confirm page for the configured
+     * delay; the ordered pass below then takes the retail confirm branch for
+     * it, exactly as a Circle release would. Hook absent or setting off: 0. */
+    s32 xenoAutoConfirm = PcPort_TextAutoAdvanceFrame ? PcPort_TextAutoAdvanceFrame() : 0;
 
     D_800ADE98++;
     if ((D_800ADE98 & 3) == 0) {
@@ -815,7 +824,7 @@ void func_8008004C(void* ot, s32 renderContextIndex) {
 
             *(s16*)(pTextBox + 0x3C4) = -1;
             if (*(s16*)(pTextBox + 0x408) == 0) {
-                if ((D_800C2694 & 0x20) != 0 && order == 0) {
+                if (((D_800C2694 & 0x20) != 0 || ((xenoAutoConfirm >> i) & 1) != 0) && order == 0) {
                     s32 actorIndex = *(s16*)(pTextBox + 0x416);
                     ActorData* pActor = (ActorData*)(uintptr_t)g_FieldActors[actorIndex].pActorData;
 
@@ -850,6 +859,11 @@ void func_8008004C(void* ot, s32 renderContextIndex) {
     }
 
     FieldTextBoxLinkPrim(ot, D_800B1DF4 + g_FieldCurRenderContextIndex * 0xC0);
+    /* TEST TOOLING (pc_port/src/text_diag.c, inert unless XENO_TEXT_DIAG):
+     * per-frame dialogue-state log after every box has ticked. */
+    if (PcPort_TextDiagFrame) {
+        PcPort_TextDiagFrame();
+    }
 }
 #endif /* XENO_PC_PORT */
 

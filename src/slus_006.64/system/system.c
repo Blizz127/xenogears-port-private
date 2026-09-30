@@ -1039,6 +1039,8 @@ int func_8003487C(void* arg0) {
 #ifndef XENO_PC_PORT
 INCLUDE_ASM("asm/slus_006.64/nonmatchings/system/system", func_80034888);
 #else
+/* Opt-in TEXT SPEED hook (pc_port/src/text_speed.c); weak, absent = retail. */
+extern s32 PcPort_TextRevealTicks(void* window) __attribute__((weak));
 void func_80034888(void* arg0, void* ot, s32 renderContextIndex) {
     u8* pWindow = arg0;
     u16 flags;
@@ -1163,15 +1165,31 @@ void func_80034888(void* arg0, void* ot, s32 renderContextIndex) {
 
     if (*(s16*)(pWindow + 0x84) != 0) {
         *(s16*)(pWindow + 0x84) -= 1;
-    } else if (*(s16*)(pWindow + 0x86) != 0) {
-        *(s16*)(pWindow + 0x86) -= 1;
     } else {
-        *(s16*)(pWindow + 0x86) = *(s16*)(pWindow + 0x88);
-        if ((*(u16*)(pWindow + 0x10) & 0x58) == 0) {
-            func_80033DF0(pWindow);
-            LoadImage((RECT*)(pRows + *(s16*)(pWindow + 0x02) * 0x60 + 0x50),
-                      (u_long*)(uintptr_t)*(u32*)(pWindow + 0x2C));
-        }
+        /* PORT ENHANCEMENT SEAM (opt-in TEXT SPEED, pc_port/src/text_speed.c).
+         * Retail runs the reveal tick below once per frame. The weak hook may
+         * ask for more ticks this frame for a field dialogue window; each
+         * extra tick is the same retail tick (per-glyph delay countdown, or
+         * one func_80033DF0 call plus its row upload) and they stop at the
+         * first explicit delay (+0x84), wait/page-clear flag (0x58) or string
+         * end (0x4 cleared), exactly where retail's next frame would stop.
+         * Hook absent or setting off: ticks == 1, the loop body runs once and
+         * the condition is never evaluated -- retail's single tick. */
+        s32 ticks = PcPort_TextRevealTicks ? PcPort_TextRevealTicks(pWindow) : 1;
+
+        do {
+            if (*(s16*)(pWindow + 0x86) != 0) {
+                *(s16*)(pWindow + 0x86) -= 1;
+            } else {
+                *(s16*)(pWindow + 0x86) = *(s16*)(pWindow + 0x88);
+                if ((*(u16*)(pWindow + 0x10) & 0x58) == 0) {
+                    func_80033DF0(pWindow);
+                    LoadImage((RECT*)(pRows + *(s16*)(pWindow + 0x02) * 0x60 + 0x50),
+                              (u_long*)(uintptr_t)*(u32*)(pWindow + 0x2C));
+                }
+            }
+        } while (--ticks > 0 && *(s16*)(pWindow + 0x84) == 0 &&
+                 (*(u16*)(pWindow + 0x10) & 0x58) == 0 && (*(u16*)(pWindow + 0x10) & 0x4) != 0);
     }
 
     if (*(s16*)(pWindow + 0x84) != 0) {
