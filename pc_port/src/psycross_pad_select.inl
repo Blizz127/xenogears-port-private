@@ -207,6 +207,25 @@ extern "C" void PsyX_Pad_ApplyHints()
 		eprintwarn("pad: SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT is set (%s); only those "
 			"controllers are visible\n", except);
 
+	/* Steam's virtual X-Box 360 pad (28de:11ff).  Under gamescope Game Mode
+	 * (Legion Go, Steam Deck, the Alienware in Game Mode) Steam Input owns
+	 * the physical pad: its evdev node is root-only and only Steam's virtual
+	 * pad is left for the game.  SDL >= 2.28 hides that virtual pad unless
+	 * SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD is set, and Steam sets
+	 * it only for games it launches itself (the launcher does not), so a
+	 * launcher-started port saw NO pad at all (owner's Legion, 2026-09-30;
+	 * confirmed by the MM lane with SDL 2.32 enumeration).  Enable it when
+	 * the environment says nothing. */
+	if (steamVirtual == NULL)
+	{
+		SDL_SetHint("SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD", "1");
+		eprintinfo("pad: SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD=1 (set by the port: Steam's virtual pad is the only pad under gamescope)\n");
+	}
+	/* gamescope drops keyboard focus from the game window; without this SDL
+	 * discards pad events while unfocused. */
+	if (SDL_getenv("SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS") == NULL)
+		SDL_SetHint("SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS", "1");
+
 	/* Steam Deck-type HID pads (real Deck, InputPlumber deck-uhid).  SDL
 	 * enables the driver with HIDAPI by default; an explicit environment
 	 * value from the user still wins. */
@@ -341,6 +360,77 @@ static int XenoPad_Better(const XenoPadEntry* a, const XenoPadEntry* b)
 }
 
 /* Pick port 1's pad.  Call after SDL has pumped joystick state. */
+/* Raw-joystick fallback (dev menu combo only).  A joystick SDL cannot map to
+ * a game controller never reaches the game (PsyCross reads GameControllers),
+ * but the player must still be able to open the dev menu from it.  Unmapped
+ * joysticks with at least 8 buttons are opened raw and read with the Linux
+ * X-Box 360 layout (button 6 = Back, 7 = Start; the same fallback as the
+ * other ports).  Each one is named once in the log with the real fix: an SDL
+ * mapping string in SDL_GAMECONTROLLERCONFIG (SDL reads it itself), e.g. a
+ * gamecontrollerdb.txt line for its GUID. */
+#define XENO_RAW_BACK  6
+#define XENO_RAW_START 7
+static SDL_Joystick*	s_xenoRaw[XENO_PAD_MAX];
+static int				s_xenoRawCount = -1;
+
+static void XenoPad_ScanRaw(void)
+{
+	int n = SDL_NumJoysticks();
+	for (int i = 0; i < XENO_PAD_MAX; i++)
+		if (s_xenoRaw[i] && !SDL_JoystickGetAttached(s_xenoRaw[i]))
+		{
+			SDL_JoystickClose(s_xenoRaw[i]);
+			s_xenoRaw[i] = NULL;
+		}
+	if (n == s_xenoRawCount)
+		return;
+	s_xenoRawCount = n;
+	for (int d = 0; d < n; d++)
+	{
+		if (SDL_IsGameController(d))
+			continue;
+		SDL_JoystickID id = SDL_JoystickGetDeviceInstanceID(d);
+		int known = 0;
+		for (int i = 0; i < XENO_PAD_MAX; i++)
+			if (s_xenoRaw[i] && SDL_JoystickInstanceID(s_xenoRaw[i]) == id) known = 1;
+		if (known)
+			continue;
+		char guid[64];
+		SDL_JoystickGetGUIDString(SDL_JoystickGetDeviceGUID(d), guid, sizeof(guid));
+		const char* name = SDL_JoystickNameForIndex(d);
+		SDL_Joystick* js = SDL_JoystickOpen(d);
+		int buttons = js ? SDL_JoystickNumButtons(js) : 0;
+		int slot = -1;
+		for (int i = 0; i < XENO_PAD_MAX && slot < 0; i++)
+			if (!s_xenoRaw[i]) slot = i;
+		if (js && buttons >= 8 && slot >= 0)
+		{
+			s_xenoRaw[slot] = js;
+			eprintinfo("pad: joystick '%s' (guid %s, %d buttons) has no game-controller mapping: the game cannot read it; "
+				"the dev menu combo falls back to the X-Box 360 layout (buttons 6+7). Real fix: SDL_GAMECONTROLLERCONFIG=\"<mapping for this guid>\"\n",
+				name ? name : "?", guid, buttons);
+		}
+		else
+		{
+			if (js) SDL_JoystickClose(js);
+			eprintinfo("pad: joystick '%s' (guid %s, %d buttons) has no game-controller mapping and too few buttons for the raw fallback; "
+				"set SDL_GAMECONTROLLERCONFIG=\"<mapping for this guid>\"\n", name ? name : "?", guid, buttons);
+		}
+	}
+}
+
+static int XenoPad_RawComboDown(void)
+{
+	for (int i = 0; i < XENO_PAD_MAX; i++)
+	{
+		SDL_Joystick* js = s_xenoRaw[i];
+		if (js && SDL_JoystickGetAttached(js) &&
+			SDL_JoystickGetButton(js, XENO_RAW_BACK) && SDL_JoystickGetButton(js, XENO_RAW_START))
+			return 1;
+	}
+	return 0;
+}
+
 /* Select+Start (Back+Start) held on ANY attached controller, not only the one
  * feeding port 1: the dev menu combo must work from whichever pad the player
  * holds (owner standard 2026-09-30).  Read directly from SDL so a pad that is
@@ -355,29 +445,7 @@ static int XenoPad_AnyComboDown(void)
 			SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_START))
 			return 1;
 	}
-	return 0;
-}
-
-/* Joysticks SDL could not map to a game controller are invisible to the game
- * and to the dev menu combo.  Name them once, with the fix: an SDL mapping
- * string in the SDL_GAMECONTROLLERCONFIG environment variable (SDL reads it
- * itself), e.g. from https://github.com/mdqinc/SDL_GameControllerDB. */
-static void XenoPad_ReportUnmapped(void)
-{
-	static int reported = 0;
-	if (reported) return;
-	reported = 1;
-	int n = SDL_NumJoysticks();
-	for (int i = 0; i < n; i++)
-	{
-		if (SDL_IsGameController(i)) continue;
-		char guid[64];
-		SDL_JoystickGetGUIDString(SDL_JoystickGetDeviceGUID(i), guid, sizeof(guid));
-		const char* name = SDL_JoystickNameForIndex(i);
-		eprintinfo("pad: joystick '%s' (guid %s) has no game-controller mapping; the game and the dev menu "
-			"cannot read it. Set SDL_GAMECONTROLLERCONFIG=\"<mapping>\" (a gamecontrollerdb.txt line for this guid)\n",
-			name ? name : "?", guid);
-	}
+	return XenoPad_RawComboDown();
 }
 
 extern "C" SDL_GameController* PsyX_Pad_HostSelect()
@@ -388,6 +456,7 @@ extern "C" SDL_GameController* PsyX_Pad_HostSelect()
 	XenoPadEntry* next = NULL;
 	const char* reason = NULL;
 
+	XenoPad_ScanRaw();
 	for (int i = 0; i < XENO_PAD_MAX; i++)
 	{
 		XenoPadEntry* e = &s_xenoPads[i];
@@ -480,7 +549,6 @@ extern "C" SDL_GameController* PsyX_Pad_HostSelect()
 	if (!s_xenoPadAnnounced || s_xenoActivePad != -2)
 	{
 		eprintinfo("pad: no game controller; port 1 is keyboard only\n");
-		XenoPad_ReportUnmapped();
 		s_xenoPadAnnounced = 1;
 		s_xenoHadActive = 0;
 		s_xenoActivePad = -2;

@@ -178,10 +178,16 @@ cmake --build build -j"$(nproc)"
   order within about 300 ms, or hold one and press the other; or press `F8`.
   A lone Select or Start still reaches the game. The combo is read from every
   attached game controller, not only the one feeding port 1, so a handheld
-  whose pad is mirrored by Steam Input or InputPlumber works too. A joystick
-  SDL cannot map to a game controller is named in the log with the fix (an
-  SDL mapping string in `SDL_GAMECONTROLLERCONFIG`). The log line
-  `[DEV_MENU] enabled/disabled` says whether the menu is on.
+  whose pad is mirrored by Steam Input or InputPlumber works too. Under
+  gamescope Game Mode (Legion Go, Steam Deck) only Steam's virtual pad is
+  visible to a launcher-started game, and SDL hides it unless
+  `SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD=1`; the port sets that hint
+  itself when the environment does not. A joystick SDL cannot map to a game
+  controller never feeds the game, but with 8 or more buttons the combo still
+  works through the X-Box 360 layout (buttons 6 and 7); the log names it with
+  the real fix (an SDL mapping string in `SDL_GAMECONTROLLERCONFIG`). The log
+  line `[DEV_MENU] enabled/disabled` says whether the menu is on, and
+  `[Psy-X] pad:` lines say which pad feeds port 1.
 - A clickable host toolbar is reserved above the game viewport. Its `SAVE`,
   `LOAD`, and `RECORD` buttons perform the same actions as the hotkeys below.
   Save/load displays amber `WAIT` while field control is locked, green

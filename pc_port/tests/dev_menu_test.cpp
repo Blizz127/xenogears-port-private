@@ -172,6 +172,12 @@ int main(void)
     PcPort_DevMenuSetHost(&s_host);
 
     CHECK(PsyX_Pad_InitSystem() == 1, "pad system up");
+    {
+        const char* h = SDL_GetHint("SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD");
+        CHECK(h && !strcmp(h, "1"), "Steam virtual gamepad allowed by the port (gamescope Game Mode): hint=%s", h ? h : "(unset)");
+        h = SDL_GetHint("SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS");
+        CHECK(h && !strcmp(h, "1"), "pad events while unfocused allowed: hint=%s", h ? h : "(unset)");
+    }
     PsyX_Pad_InitPad(0, s_pad[0]);
     PsyX_Pad_InitPad(1, s_pad[1]);
     pad = attach(0x28de, 0x11ff, "Steam Virtual Gamepad"); /* the Legion Go 2's only pad */
@@ -374,6 +380,35 @@ int main(void)
     detach(&padB); frame();
     tap(&pad, SDL_CONTROLLER_BUTTON_A); frame();
     CHECK(PsyX_Pad_HostActiveInstance() == pad.id, "pad A is port 1 again");
+
+    printf("-- raw fallback: an unmapped joystick with >= 8 buttons opens the menu with buttons 6+7\n");
+    {
+        SDL_VirtualJoystickDesc d; memset(&d, 0, sizeof d);
+        d.version = SDL_VIRTUAL_JOYSTICK_DESC_VERSION; d.type = SDL_JOYSTICK_TYPE_UNKNOWN;
+        d.naxes = 6; d.nbuttons = 11; d.nhats = 1; d.vendor_id = 0x1209; d.product_id = 0x0001; d.name = "Unmapped Stick";
+        SDL_SetHintWithPriority(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES, "0x1209/0x0001", SDL_HINT_OVERRIDE);
+        int idx = SDL_JoystickAttachVirtualEx(&d);
+        CHECK(idx >= 0 && !SDL_IsGameController(idx), "virtual joystick attached and NOT a game controller");
+        SDL_Joystick* raw = SDL_JoystickOpen(idx);
+        frame(); frame();
+        CHECK(PsyX_Pad_HostActiveInstance() == pad.id && !PcPort_DevMenuOpen(), "raw stick does not disturb port 1");
+        SDL_JoystickSetVirtualButton(raw, 6, 1); SDL_JoystickSetVirtualButton(raw, 7, 1); frame();
+        CHECK(PcPort_DevMenuOpen() && held() == 0, "raw buttons 6+7 (X-Box 360 Back+Start) open the menu; game sees neutral");
+        SDL_JoystickSetVirtualButton(raw, 6, 0); SDL_JoystickSetVirtualButton(raw, 7, 0);
+        for (int i = 0; i < 4; i++) frame();
+        SDL_JoystickSetVirtualButton(raw, 6, 1); SDL_JoystickSetVirtualButton(raw, 7, 1); frame();
+        CHECK(!PcPort_DevMenuOpen(), "and close it");
+        SDL_JoystickSetVirtualButton(raw, 6, 0); SDL_JoystickSetVirtualButton(raw, 7, 0);
+        for (int i = 0; i < 4; i++) frame();
+        SDL_JoystickSetVirtualButton(raw, 7, 1); frame(); frame();
+        CHECK(!PcPort_DevMenuOpen() && held() == 0, "raw Start alone: nothing (raw pads never feed the game)");
+        SDL_JoystickSetVirtualButton(raw, 7, 0); frame();
+        SDL_JoystickClose(raw);
+        for (int i = 0; i < SDL_NumJoysticks(); i++)
+            if (SDL_JoystickGetDeviceInstanceID(i) == SDL_JoystickGetDeviceInstanceID(idx)) { SDL_JoystickDetachVirtual(i); break; }
+        SDL_SetHintWithPriority(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES, "", SDL_HINT_OVERRIDE);
+        frame(); frame();
+    }
 
     printf("-- F8 and the keyboard\n");
     CHECK(PcPort_DevMenuKey(PC_DEV_OPEN, 1) == 1 && PcPort_DevMenuOpen(), "F8 opens");
