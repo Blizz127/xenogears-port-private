@@ -173,6 +173,15 @@ cmake --build build -j"$(nproc)"
 
 ## Host hotkeys
 
+- **Dev menu (opt-in, `XENO_DEV_MENU=1` or `[cheats] dev_menu = on`):** press
+  Select (Back/View) and Start together on any connected controller, in either
+  order within about 300 ms, or hold one and press the other; or press `F8`.
+  A lone Select or Start still reaches the game. The combo is read from every
+  attached game controller, not only the one feeding port 1, so a handheld
+  whose pad is mirrored by Steam Input or InputPlumber works too. A joystick
+  SDL cannot map to a game controller is named in the log with the fix (an
+  SDL mapping string in `SDL_GAMECONTROLLERCONFIG`). The log line
+  `[DEV_MENU] enabled/disabled` says whether the menu is on.
 - A clickable host toolbar is reserved above the game viewport. Its `SAVE`,
   `LOAD`, and `RECORD` buttons perform the same actions as the hotkeys below.
   Save/load displays amber `WAIT` while field control is locked, green

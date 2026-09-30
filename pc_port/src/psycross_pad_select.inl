@@ -341,6 +341,45 @@ static int XenoPad_Better(const XenoPadEntry* a, const XenoPadEntry* b)
 }
 
 /* Pick port 1's pad.  Call after SDL has pumped joystick state. */
+/* Select+Start (Back+Start) held on ANY attached controller, not only the one
+ * feeding port 1: the dev menu combo must work from whichever pad the player
+ * holds (owner standard 2026-09-30).  Read directly from SDL so a pad that is
+ * not (yet) the active one counts. */
+static int XenoPad_AnyComboDown(void)
+{
+	for (int i = 0; i < XENO_PAD_MAX; i++)
+	{
+		SDL_GameController* gc = s_xenoPads[i].gc;
+		if (gc && SDL_GameControllerGetAttached(gc) &&
+			SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_BACK) &&
+			SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_START))
+			return 1;
+	}
+	return 0;
+}
+
+/* Joysticks SDL could not map to a game controller are invisible to the game
+ * and to the dev menu combo.  Name them once, with the fix: an SDL mapping
+ * string in the SDL_GAMECONTROLLERCONFIG environment variable (SDL reads it
+ * itself), e.g. from https://github.com/mdqinc/SDL_GameControllerDB. */
+static void XenoPad_ReportUnmapped(void)
+{
+	static int reported = 0;
+	if (reported) return;
+	reported = 1;
+	int n = SDL_NumJoysticks();
+	for (int i = 0; i < n; i++)
+	{
+		if (SDL_IsGameController(i)) continue;
+		char guid[64];
+		SDL_JoystickGetGUIDString(SDL_JoystickGetDeviceGUID(i), guid, sizeof(guid));
+		const char* name = SDL_JoystickNameForIndex(i);
+		eprintinfo("pad: joystick '%s' (guid %s) has no game-controller mapping; the game and the dev menu "
+			"cannot read it. Set SDL_GAMECONTROLLERCONFIG=\"<mapping>\" (a gamecontrollerdb.txt line for this guid)\n",
+			name ? name : "?", guid);
+	}
+}
+
 extern "C" SDL_GameController* PsyX_Pad_HostSelect()
 {
 	Uint32 now = SDL_GetTicks();
@@ -441,6 +480,7 @@ extern "C" SDL_GameController* PsyX_Pad_HostSelect()
 	if (!s_xenoPadAnnounced || s_xenoActivePad != -2)
 	{
 		eprintinfo("pad: no game controller; port 1 is keyboard only\n");
+		XenoPad_ReportUnmapped();
 		s_xenoPadAnnounced = 1;
 		s_xenoHadActive = 0;
 		s_xenoActivePad = -2;

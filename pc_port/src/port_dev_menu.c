@@ -10,7 +10,11 @@
 #include "cheat_console.h"
 #include "../include/xg_plat/config.h"
 
-#define COMBO_WINDOW_MS 150u   /* Select/Start held back while the combo may form */
+/* Select/Start are held back from the game while the combo may form.  The
+ * owner's standard (2026-09-30): Select and Start pressed together, in either
+ * order, within about 300 ms, or one held and the other pressed later, opens
+ * the menu on ANY controller; a lone Select or Start still reaches the game. */
+#define COMBO_WINDOW_MS 300u
 #define TAP_REPLAY_POLLS 2     /* a held-back tap is replayed for two samples */
 
 enum { PAGE_ROOT, PAGE_WARP, PAGE_FINISH, PAGE_CHEATS, PAGE_OPTIONS, PAGE_ENHANCE, PAGE_WARP_AREA };
@@ -199,7 +203,7 @@ void PcPort_DevMenuInit(void)
     s_padInstance = -1;
     s_replay = 0;
     if (on)
-        fprintf(stderr, "[DEV_MENU] enabled: Select+Start on one pad or F8 opens it\n");
+        fprintf(stderr, "[DEV_MENU] enabled: Select+Start (together or held, any pad) or F8 opens it\n");
     else
         fprintf(stderr, "[DEV_MENU] disabled: F8 and Select+Start do nothing "
                 "(enable with XENO_DEV_MENU=1 or [cheats] dev_menu = on)\n");
@@ -411,9 +415,13 @@ unsigned PcPort_DevMenuPad(unsigned bits, int instance, int held_any, unsigned n
     /* A pad that appears (or takes port 1) with buttons held must go neutral
      * before it can operate the menu. */
     if (instance != s_padInstance) {
+        /* Navigation buttons held on arrival must go neutral first.  Select
+         * and Start are re-armed instead: a handheld with a mirrored pair
+         * (raw pad + InputPlumber/Steam copy) switches the active pad on the
+         * first press, and the combo must survive that switch. */
         s_padInstance = instance;
-        s_padPrev = bits;
-        s_combo = (bits & combo) ? COMBO_PASS : COMBO_IDLE;
+        s_padPrev = bits & ~combo;
+        s_combo = COMBO_IDLE;
     }
     pressed = bits & ~s_padPrev;
     s_padPrev = bits;
@@ -458,7 +466,14 @@ unsigned PcPort_DevMenuPad(unsigned bits, int instance, int held_any, unsigned n
         if (!(bits & combo)) s_combo = COMBO_IDLE;
         break;
     case COMBO_PASS:
-        if (!(bits & combo)) s_combo = COMBO_IDLE;
+        /* One button is held and already reaching the game; the other
+         * arriving still forms the combo ("held" form of the standard). */
+        if ((bits & combo) == combo && (pressed & combo)) {
+            if (s_open) close_menu("Select+Start"); else open_menu("Select+Start");
+            s_combo = COMBO_OWNED;
+        } else if (!(bits & combo)) {
+            s_combo = COMBO_IDLE;
+        }
         break;
     }
     if (s_combo == COMBO_PENDING || s_combo == COMBO_OWNED)
