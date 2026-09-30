@@ -50,6 +50,11 @@ int main(void)
     assert(!PcPort_Hd2dSpriteTextureOverride((void *)1,0,0,0,0,0,0,&tex,uv));
     assert(!calls && !links);
     f=fopen(p.rgba_path,"wb");assert(f);assert(fwrite(pixels,1,sizeof pixels,f)==sizeof pixels);assert(!fclose(f));
+    assert(!setenv("XENO_HD2D_ATLAS_DIR","pc_port/assets/hd2d",1));
+    f=OpenAtlas("nonexistent-working-directory/test.rgba");assert(f);assert(!fclose(f));
+    assert(!setenv("XENO_HD2D_ATLAS_DIR","missing-explicit-atlas-directory",1));
+    assert(!OpenAtlas(p.rgba_path)); /* explicit override never falls back */
+    assert(!unsetenv("XENO_HD2D_ATLAS_DIR"));
     enabled=1;memcpy(saved,state,sizeof state);
     assert(PcPort_Hd2dSpriteSubmitPart(&p,&m,&q));assert(links==1 && linked_ot==q.ot);
     assert(!memcmp(state,saved,sizeof state));
@@ -64,6 +69,19 @@ int main(void)
     other=packet;assert(!PcPort_Hd2dSpriteTextureOverride(&other,9,8,1,3,2,4,&tex,uv));
     packet.r0++;assert(!PcPort_Hd2dSpriteTextureOverride(&packet,9,8,1,3,2,4,&tex,uv));packet.r0--;
     PcPort_Hd2dSpriteGpuWalkDone();assert(!PcPort_Hd2dSpriteTextureOverride(&packet,9,8,1,3,2,4,&tex,uv));
+    /* Native vertex UV reversal maps right atlas edge to the left screen vertex. */
+    m.identity=0xdb7d0105;m.actor=1;
+    m.u[0]=m.u[2]=2;m.u[1]=m.u[3]=1;memcpy(q.u,m.u,4);
+    setUV4(&packet,2,3,1,3,2,4,1,4);
+    assert(PcPort_Hd2dSpriteSubmitPart(&p,&m,&q));
+    assert(PcPort_Hd2dSpriteTextureOverride(&packet,9,8,1,3,2,4,&tex,uv));
+    assert(uv[0]==.5f/64 && uv[2]==15.5f/64);
+    assert(uv[0]+(q.u[0]-1)*(uv[2]-uv[0])==uv[2]);
+    assert(packet.x0==-8 && packet.x1==9 && packet.y0==12 && packet.y2==45 && linked_ot==q.ot);
+    PcPortHd2dSpriteDiagnostics mirror_stats;assert(PcPort_Hd2dSpriteDiagnosticsGet(&mirror_stats));assert(mirror_stats.player_queries==1 && mirror_stats.player_accepted==1);
+    PcPort_Hd2dSpriteGpuWalkDone();
+    m.identity=123;m.actor=0;m.u[0]=m.u[2]=1;m.u[1]=m.u[3]=2;memcpy(q.u,m.u,4);
+    setUV4(&packet,1,3,2,3,1,4,2,4);
     assert(PcPort_Hd2dSpriteSubmitPart(&p,&m,&q));
     opening=0;assert(!PcPort_Hd2dSpriteTextureOverride(&packet,9,8,1,3,2,4,&tex,uv));
     PcPort_Hd2dSpriteGpuWalkDone();opening=1;
@@ -81,9 +99,9 @@ int main(void)
     {
         PcPortHd2dSpriteDiagnostics stats;
         assert(PcPort_Hd2dSpriteDiagnosticsGet(&stats));
-        assert(stats.registered==3 && stats.accepted==1 && stats.queries==5 &&
+        assert(stats.registered==4 && stats.accepted==2 && stats.queries==6 &&
             stats.snapshot_miss==1 && stats.no_identity==2 && stats.premature_presents==1 &&
-            stats.gpu_walks==5 && stats.no_scope==1 && stats.expired_unconsumed==2 && !stats.pending);
+            stats.gpu_walks==6 && stats.no_scope==1 && stats.expired_unconsumed==2 && !stats.pending);
         enabled=0;assert(!PcPort_Hd2dSpriteDiagnosticsGet((void *)1));
     }
     /* Multiple immutable profiles interleave in one OT without changing any

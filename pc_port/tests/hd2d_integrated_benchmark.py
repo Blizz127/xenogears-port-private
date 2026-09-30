@@ -24,7 +24,12 @@ def main():
     p.add_argument('--out',required=True,type=Path)
     p.add_argument('--enabled',required=True,type=int,choices=(0,1))
     p.add_argument('--require-hardware',action='store_true')
+    p.add_argument('--require-all-effects',action='store_true',help='ON must activate all nine effects in every measured sample')
+    p.add_argument('--atlas-dir',type=Path)
+    p.add_argument('--width',type=int,default=1280)
+    p.add_argument('--height',type=int,default=720)
     a=p.parse_args(); a.out=a.out.resolve();a.out.mkdir(parents=True,exist_ok=False)
+    if not (64<=a.width<=8192 and 64<=a.height<=8192):p.error('invalid resolution')
     for q in (a.binary,a.checkpoint,a.data_dir/'disc1.bin'):
         if not q.is_file():p.error('missing approved input '+str(q))
     env={k:v for k,v in os.environ.items() if not k.startswith(('XENO_','DISPLAY','WAYLAND_DISPLAY','XAUTHORITY'))}
@@ -32,10 +37,15 @@ def main():
     env.update(SDL_VIDEODRIVER='offscreen',EGL_PLATFORM='surfaceless',
         SDL_AUDIODRIVER='dummy',ALSOFT_DRIVERS='null',LP_NUM_THREADS='2',
         XDG_STATE_HOME=str(a.out/'state'),XDG_CONFIG_HOME=str(a.out/'config'),XDG_RUNTIME_DIR=str(a.out/'runtime'),
-        XENO_DATA_DIR=str(a.data_dir.resolve()),XENO_QUICKSAVE_PATH=str(a.checkpoint.resolve()),
+        XENO_DATA_DIR=str(a.data_dir.resolve()),XENO_DISC=str((a.data_dir/'disc1.bin').resolve()),XENO_QUICKSAVE_PATH=str(a.checkpoint.resolve()),
+        XENO_FIELD_TEST='1',XENO_FIELD_MAP='14',XENO_FIELD_ENTRANCE='0',
         XENO_CHEATS_CONSOLE='1',XENO_FEI_HD2D='0',XENO_HD2D_OPENING_MAPS='14',
         XENO_HD2D_OCTOPATH=str(a.enabled),XENO_HD2D_INTEGRATED_BENCHMARK='1',
         XENO_HD2D_SPRITE_DIAG='1',XENO_HD2D_BATCH_STATS='1')
+    env.update(XENO_VIDEO_WIDTH=str(a.width),XENO_VIDEO_HEIGHT=str(a.height))
+    if a.atlas_dir is not None:
+        if not a.atlas_dir.is_dir():p.error('missing atlas directory')
+        env['XENO_HD2D_ATLAS_DIR']=str(a.atlas_dir.resolve())
     lines=[]
     with (a.out/'private-runtime.log').open('w') as f:
         proc=subprocess.Popen([str(a.binary.resolve())],cwd=Path.cwd(),env=env,stdin=subprocess.PIPE,
@@ -64,10 +74,16 @@ def main():
     accepted=[int(x) for x in re.findall(r'\[hd2d-sprite-gpu\].*?accepted=(\d+)',text)]
     hardware=bool(renderer and not any(word in renderer[-1].lower()
         for word in ('llvmpipe','softpipe','lavapipe','swrast','software')))
-    ok=bool(samples and int(samples[-1][0])==a.enabled and int(samples[-1][1])==240 and
-            (not a.require_hardware or hardware) and not any(rejected) and (not a.enabled or any(accepted)))
+    effects=re.findall(r'\[hd2d-integrated-effects\] samples=(\d+) minimum_active=([0-9a-f]+) maximum_active=([0-9a-f]+) all_effect_samples=(\d+) lights=(\d+) shadows=(\d+) particles=(\d+)',text)
+    all_effects=bool(effects and int(effects[-1][0])==240 and int(effects[-1][1],16)==0x1ff and int(effects[-1][3])==240)
+    restored='player position restored' in text
+    ok=bool(restored and samples and int(samples[-1][0])==a.enabled and int(samples[-1][1])==240 and
+            (not a.require_hardware or hardware) and not any(rejected) and (not a.enabled or any(accepted)) and
+            (not a.require_all_effects or not a.enabled or all_effects))
     metrics={'scope':'actual field14 presentation composition; not total engine GPU time',
-        'enabled':a.enabled,'renderer':renderer[-1] if renderer else None,'hardware':hardware,
+        'enabled':a.enabled,'checkpoint_restored':restored,'process_returncode':proc.returncode,'renderer':renderer[-1] if renderer else None,'hardware':hardware,
+        'resolution':[a.width,a.height],'all_nine_effects_every_sample':all_effects,
+        'effect_observation':effects[-1] if effects else None,
         'samples':int(samples[-1][1]) if samples else 0,
         'composition_median_ms':float(samples[-1][2]) if samples else None,
         'composition_p95_ms':float(samples[-1][3]) if samples else None,

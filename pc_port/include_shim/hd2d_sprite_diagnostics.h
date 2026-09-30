@@ -8,8 +8,14 @@ typedef struct {
     uint64_t registered, queries, accepted, no_scope, no_texture, no_identity;
     uint64_t snapshot_miss, metadata_miss, uv_miss, premature_presents;
     uint64_t gpu_walks, expired_unconsumed;
+    uint64_t player_queries, player_accepted; /* exact registered Fei packets only */
     unsigned pending;
 } PcPortHd2dSpriteDiagnostics;
+/* Fei actor1 identity db7d0105 only; CPU registrations are not GPU accepts. */
+typedef struct {
+    uint64_t offered, registered, fallback, missing_frame, missing_part, missing_uv, transport_failed;
+} PcPortHd2dPlayerPartDiagnostics;
+int PcPort_Hd2dPlayerPartDiagnosticsGet(PcPortHd2dPlayerPartDiagnostics *out);
 /* XENO_HD2D_SPRITE_DIAG=1 and master ON; OFF never touches out. */
 int PcPort_Hd2dSpriteDiagnosticsGet(PcPortHd2dSpriteDiagnostics *out);
 /* CPU-only explicit invalidation for enable transitions. */

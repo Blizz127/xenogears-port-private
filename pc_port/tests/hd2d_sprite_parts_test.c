@@ -26,6 +26,17 @@ int main(void)
     enabled = 1;
     assert(!PcPort_Hd2dSpriteDraw(&info, 0, &q)); /* missing transport/profile */
     assert(!memcmp(&original, &q, sizeof q));
+    { PcPortHd2dPartMapping variants[2]={mapping,mapping};
+      PcPortHd2dPartProfile vp=profile;vp.parts=variants;vp.count=2;
+      assert(!PcPort_Hd2dPartProfileValidate(&vp)); // identical lookup tuple ambiguous
+      variants[1].u[0]=2;variants[1].u[1]=1;variants[1].u[2]=2;variants[1].u[3]=1;
+      assert(PcPort_Hd2dPartProfileValidate(&vp));
+      info.actor=0;q=original;assert(PcPort_Hd2dPartLookup(&vp,7,&info,0,&q)==variants);
+      memcpy(q.u,variants[1].u,4);assert(PcPort_Hd2dPartLookup(&vp,7,&info,0,&q)==variants+1);
+      assert(!memcmp(q.x,original.x,sizeof q.x) && q.ot==original.ot); // UV mirror keeps retail geometry
+      variants[1]=mapping;variants[1].tpage++;assert(PcPort_Hd2dPartProfileValidate(&vp));
+      variants[1]=mapping;variants[1].clut++;assert(PcPort_Hd2dPartProfileValidate(&vp));
+    }
     mapping.width = 65;
     assert(!PcPort_Hd2dPartProfileValidate(&profile));
     return 0;

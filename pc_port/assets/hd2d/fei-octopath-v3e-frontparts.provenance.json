@@ -1,0 +1,468 @@
+{
+  "schema": 1,
+  "label": "fan-made, AI-generated replacement sprite art created for this project; not from the game; characters © Square Enix",
+  "width": 96,
+  "height": 128,
+  "rgba_path": "pc_port/assets/hd2d/fei-octopath-v3e-frontparts.rgba",
+  "parts": [
+    {
+      "identity": 3682402565,
+      "map": 14,
+      "actor": 1,
+      "frame": 190,
+      "part": 0,
+      "tpage": 26,
+      "clut": 14353,
+      "u": [
+        4,
+        15,
+        4,
+        15
+      ],
+      "v": [
+        55,
+        55,
+        60,
+        60
+      ],
+      "rect": [
+        0,
+        0,
+        24,
+        12
+      ],
+      "trace": "Geometry-only front190 from existing opening profile; ORIGINAL pixel-cluster art; strict footprint gate pending"
+    },
+    {
+      "identity": 3682402565,
+      "map": 1,
+      "actor": 1,
+      "frame": 190,
+      "part": 0,
+      "tpage": 26,
+      "clut": 14353,
+      "u": [
+        4,
+        15,
+        4,
+        15
+      ],
+      "v": [
+        55,
+        55,
+        60,
+        60
+      ],
+      "rect": [
+        0,
+        0,
+        24,
+        12
+      ],
+      "trace": "Geometry-only front190 from existing opening profile; ORIGINAL pixel-cluster art; strict footprint gate pending"
+    },
+    {
+      "identity": 3682402565,
+      "map": 14,
+      "actor": 1,
+      "frame": 190,
+      "part": 1,
+      "tpage": 26,
+      "clut": 14353,
+      "u": [
+        20,
+        27,
+        20,
+        27
+      ],
+      "v": [
+        43,
+        43,
+        48,
+        48
+      ],
+      "rect": [
+        24,
+        0,
+        16,
+        12
+      ],
+      "trace": "Geometry-only front190 from existing opening profile; ORIGINAL pixel-cluster art; strict footprint gate pending"
+    },
+    {
+      "identity": 3682402565,
+      "map": 1,
+      "actor": 1,
+      "frame": 190,
+      "part": 1,
+      "tpage": 26,
+      "clut": 14353,
+      "u": [
+        20,
+        27,
+        20,
+        27
+      ],
+      "v": [
+        43,
+        43,
+        48,
+        48
+      ],
+      "rect": [
+        24,
+        0,
+        16,
+        12
+      ],
+      "trace": "Geometry-only front190 from existing opening profile; ORIGINAL pixel-cluster art; strict footprint gate pending"
+    },
+    {
+      "identity": 3682402565,
+      "map": 14,
+      "actor": 1,
+      "frame": 190,
+      "part": 2,
+      "tpage": 26,
+      "clut": 14353,
+      "u": [
+        20,
+        27,
+        20,
+        27
+      ],
+      "v": [
+        34,
+        34,
+        41,
+        41
+      ],
+      "rect": [
+        40,
+        0,
+        16,
+        16
+      ],
+      "trace": "Geometry-only front190 from existing opening profile; ORIGINAL pixel-cluster art; strict footprint gate pending"
+    },
+    {
+      "identity": 3682402565,
+      "map": 1,
+      "actor": 1,
+      "frame": 190,
+      "part": 2,
+      "tpage": 26,
+      "clut": 14353,
+      "u": [
+        20,
+        27,
+        20,
+        27
+      ],
+      "v": [
+        34,
+        34,
+        41,
+        41
+      ],
+      "rect": [
+        40,
+        0,
+        16,
+        16
+      ],
+      "trace": "Geometry-only front190 from existing opening profile; ORIGINAL pixel-cluster art; strict footprint gate pending"
+    },
+    {
+      "identity": 3682402565,
+      "map": 14,
+      "actor": 1,
+      "frame": 190,
+      "part": 3,
+      "tpage": 26,
+      "clut": 14353,
+      "u": [
+        4,
+        31,
+        4,
+        31
+      ],
+      "v": [
+        1,
+        1,
+        13,
+        13
+      ],
+      "rect": [
+        0,
+        16,
+        56,
+        26
+      ],
+      "trace": "Geometry-only front190 from existing opening profile; ORIGINAL pixel-cluster art; strict footprint gate pending"
+    },
+    {
+      "identity": 3682402565,
+      "map": 1,
+      "actor": 1,
+      "frame": 190,
+      "part": 3,
+      "tpage": 26,
+      "clut": 14353,
+      "u": [
+        4,
+        31,
+        4,
+        31
+      ],
+      "v": [
+        1,
+        1,
+        13,
+        13
+      ],
+      "rect": [
+        0,
+        16,
+        56,
+        26
+      ],
+      "trace": "Geometry-only front190 from existing opening profile; ORIGINAL pixel-cluster art; strict footprint gate pending"
+    },
+    {
+      "identity": 3682402565,
+      "map": 14,
+      "actor": 1,
+      "frame": 190,
+      "part": 4,
+      "tpage": 26,
+      "clut": 14353,
+      "u": [
+        4,
+        23,
+        4,
+        23
+      ],
+      "v": [
+        15,
+        15,
+        32,
+        32
+      ],
+      "rect": [
+        0,
+        42,
+        40,
+        36
+      ],
+      "trace": "Geometry-only front190 from existing opening profile; ORIGINAL pixel-cluster art; strict footprint gate pending"
+    },
+    {
+      "identity": 3682402565,
+      "map": 1,
+      "actor": 1,
+      "frame": 190,
+      "part": 4,
+      "tpage": 26,
+      "clut": 14353,
+      "u": [
+        4,
+        23,
+        4,
+        23
+      ],
+      "v": [
+        15,
+        15,
+        32,
+        32
+      ],
+      "rect": [
+        0,
+        42,
+        40,
+        36
+      ],
+      "trace": "Geometry-only front190 from existing opening profile; ORIGINAL pixel-cluster art; strict footprint gate pending"
+    },
+    {
+      "identity": 3682402565,
+      "map": 14,
+      "actor": 1,
+      "frame": 190,
+      "part": 5,
+      "tpage": 26,
+      "clut": 14353,
+      "u": [
+        4,
+        15,
+        4,
+        15
+      ],
+      "v": [
+        34,
+        34,
+        53,
+        53
+      ],
+      "rect": [
+        56,
+        0,
+        24,
+        40
+      ],
+      "trace": "Geometry-only front190 from existing opening profile; ORIGINAL pixel-cluster art; strict footprint gate pending"
+    },
+    {
+      "identity": 3682402565,
+      "map": 1,
+      "actor": 1,
+      "frame": 190,
+      "part": 5,
+      "tpage": 26,
+      "clut": 14353,
+      "u": [
+        4,
+        15,
+        4,
+        15
+      ],
+      "v": [
+        34,
+        34,
+        53,
+        53
+      ],
+      "rect": [
+        56,
+        0,
+        24,
+        40
+      ],
+      "trace": "Geometry-only front190 from existing opening profile; ORIGINAL pixel-cluster art; strict footprint gate pending"
+    }
+  ],
+  "production_status": "verified frame190 front idle only; expanded animation coverage pending",
+  "original_authoring_source": "pc_port/tools/author_fei_pixel_v3.py",
+  "cells": [
+    {
+      "part": 0,
+      "x": 0,
+      "y": 0,
+      "width": 24,
+      "height": 12,
+      "retail_texel_grid": [
+        12,
+        6
+      ],
+      "opaque_colors": 9,
+      "alpha_values": [
+        255
+      ],
+      "opaque_pixels": 288
+    },
+    {
+      "part": 1,
+      "x": 24,
+      "y": 0,
+      "width": 16,
+      "height": 12,
+      "retail_texel_grid": [
+        8,
+        6
+      ],
+      "opaque_colors": 7,
+      "alpha_values": [
+        255
+      ],
+      "opaque_pixels": 192
+    },
+    {
+      "part": 2,
+      "x": 40,
+      "y": 0,
+      "width": 16,
+      "height": 16,
+      "retail_texel_grid": [
+        8,
+        8
+      ],
+      "opaque_colors": 7,
+      "alpha_values": [
+        0,
+        255
+      ],
+      "opaque_pixels": 207
+    },
+    {
+      "part": 3,
+      "x": 0,
+      "y": 16,
+      "width": 56,
+      "height": 26,
+      "retail_texel_grid": [
+        28,
+        13
+      ],
+      "opaque_colors": 15,
+      "alpha_values": [
+        0,
+        255
+      ],
+      "opaque_pixels": 1373
+    },
+    {
+      "part": 4,
+      "x": 0,
+      "y": 42,
+      "width": 40,
+      "height": 36,
+      "retail_texel_grid": [
+        20,
+        18
+      ],
+      "opaque_colors": 11,
+      "alpha_values": [
+        0,
+        255
+      ],
+      "opaque_pixels": 1318
+    },
+    {
+      "part": 5,
+      "x": 56,
+      "y": 0,
+      "width": 24,
+      "height": 40,
+      "retail_texel_grid": [
+        12,
+        20
+      ],
+      "opaque_colors": 12,
+      "alpha_values": [
+        0,
+        255
+      ],
+      "opaque_pixels": 547
+    }
+  ],
+  "pack_palette": {
+    "opaque_colors": 24,
+    "alpha_values": [
+      0,
+      255
+    ],
+    "opaque_pixels": 3925
+  },
+  "footprint_evidence": {
+    "house": "fei-v3e-house-isolated: 8 strict triples, all edges 0px,55 occluded rows identical",
+    "Lahan": "fei-v3e-lahan-isolated: 8 strict triples, max part edge1px, silhouette0px",
+    "pose_replay": "variant0:168/168 build-presents exactkeys/restored;8strict triples"
+  },
+  "binary_guard": {
+    "PNG": 0,
+    "RGBA": 0,
+    "method": "ELF wrappers preserve exact asset bytes"
+  },
+  "rgba_sha256": "e23c2638b622dacb4ff32bf55cb9f99531a206ea60dbe827f3fa92e255628288"
+}

@@ -120,6 +120,38 @@ static void items(const char *name,const char *countName,const XgHd2dItem *items
     scalar(countName,n);
     if(n) glUniform4fv(glGetUniformLocation(program,name),n,&valid[0].x);
 }
+/* First two valid explicit anchors in caller order; no inferred sun. */
+static void rayItems(const XgHd2dFrame *frame) {
+    XgHd2dItem valid[2]; int n=0;
+    if(frame->light_count<=XG_HD2D_MAX_ITEMS) for(unsigned i=0;i<frame->light_count && n<2;++i) {
+        XgHd2dItem v=frame->lights[i];
+        if(isfinite(v.x) && isfinite(v.y) && isfinite(v.z) && isfinite(v.w) &&
+           v.x>=0 && v.x<=1 && v.y>=0 && v.y<=1 && v.z>0 && v.w>0) valid[n++]=v;
+    }
+    scalar("rayCount",n);
+    if(n) glUniform4fv(glGetUniformLocation(program,"rayLights"),n,&valid[0].x);
+}
+static void shadowItems(const XgHd2dFrame *frame) {
+    scalar("shadowMode",frame->shadow_mode);
+    if(frame->shadow_mode==XG_HD2D_SHADOW_COMPOSITION) {
+        items("shadows","shadowCount",frame->shadows,frame->shadow_count,-1);
+        return;
+    }
+    XgHd2dItem valid[XG_HD2D_MAX_ITEMS];
+    float order[XG_HD2D_MAX_ITEMS]; int n=0;
+    if(frame->shadow_mode==XG_HD2D_SHADOW_OT_CONTACT && frame->shadow_count<=XG_HD2D_MAX_ITEMS)
+        for(unsigned i=0;i<frame->shadow_count;++i) {
+            XgHd2dItem v=frame->shadows[i];float z=frame->shadow_order[i];
+            if(isfinite(v.x) && isfinite(v.y) && isfinite(v.z) && isfinite(v.w) &&
+               v.x>=0 && v.x<=1 && v.y>=0 && v.y<=1 && v.z>0 && v.w>0 &&
+               isfinite(z) && z>=0 && z<=1) { valid[n]=v;order[n++]=z; }
+        }
+    scalar("shadowCount",n);
+    if(n) {
+        glUniform4fv(glGetUniformLocation(program,"shadows"),n,&valid[0].x);
+        glUniform1fv(glGetUniformLocation(program,"shadowOrder"),n,order);
+    }
+}
 const char *XgHd2d_LastError(void) { return errorText; }
 int XgHd2d_Present(const XgHd2dConfig *config,const XgHd2dFrame *frame) {
     XgHd2dPlan plan=XgHd2d_Plan(config,frame);
@@ -171,8 +203,9 @@ int XgHd2d_Present(const XgHd2dConfig *config,const XgHd2dFrame *frame) {
     glUniform2f(glGetUniformLocation(program,"fogRange"),
         frame->depth_mode==XG_HD2D_DEPTH_OT_ORDER?config->order_fog_start:config->fog_start,
         frame->depth_mode==XG_HD2D_DEPTH_OT_ORDER?config->order_fog_end:config->fog_end);
+    rayItems(frame);
     items("lights","lightCount",frame->lights,frame->light_count,-1);
-    items("shadows","shadowCount",frame->shadows,frame->shadow_count,-1);
+    shadowItems(frame);
     items("particles","particleCount",frame->particles,frame->particle_count,frame->particle_mode);
     glViewport(frame->x,frame->y,frame->width,frame->height);
     glDrawArrays(GL_TRIANGLES,0,3); errorText[0]=0; result=1;

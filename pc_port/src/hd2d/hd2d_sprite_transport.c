@@ -39,7 +39,7 @@ static PcPortHd2dSpriteDiagnostics diagnostics;
 static int diagnostic_requested = -1;
 static void DiagnosticSummary(void)
 {
-    if (!PcPort_Hd2dEnabled() || diagnostic_requested != 1) return;
+    if (diagnostic_requested != 1) return;
     fprintf(stderr,"[hd2d-sprite-gpu] registered=%llu queries=%llu accepted=%llu no_scope=%llu no_texture=%llu no_identity=%llu snapshot_miss=%llu metadata_miss=%llu uv_miss=%llu premature_presents=%llu gpu_walks=%llu expired_unconsumed=%llu pending=%u\n",
         (unsigned long long)diagnostics.registered,(unsigned long long)diagnostics.queries,
         (unsigned long long)diagnostics.accepted,(unsigned long long)diagnostics.no_scope,
@@ -118,6 +118,27 @@ static int PacketMatchesQuad(const POLY_FT4 *p, const PcPortHd2dRetailQuad *q)
         !memcmp(x,q->x,sizeof x) && !memcmp(y,q->y,sizeof y) &&
         !memcmp(u,q->u,sizeof u) && !memcmp(v,q->v,sizeof v);
 }
+/* Private packages can run from any working directory by setting the atlas
+ * directory explicitly. A configured directory fails closed: never silently
+ * substitute a similarly named atlas from the caller's working directory. */
+static FILE *OpenAtlas(const char *profile_path)
+{
+    const char *directory=getenv("XENO_HD2D_ATLAS_DIR");
+    const char *name;
+    char *path;
+    FILE *file;
+    size_t length;
+    if (!directory || !*directory) return fopen(profile_path,"rb");
+    name=strrchr(profile_path,'/'); name=name ? name+1 : profile_path;
+    if (!*name || strlen(directory)>4096 || strlen(name)>4096) return NULL;
+    length=strlen(directory)+strlen(name)+2;
+    path=malloc(length);
+    if (!path) return NULL;
+    snprintf(path,length,"%s/%s",directory,name);
+    file=fopen(path,"rb");
+    free(path);
+    return file;
+}
 static GLuint LoadTexture(const PcPortHd2dPartProfile *p)
 {
     FILE *file;
@@ -129,7 +150,7 @@ static GLuint LoadTexture(const PcPortHd2dPartProfile *p)
     if(texture) return texture;
     if(atlas_count==MAX_CACHED_ATLASES || !PcPort_Hd2dPartProfileValidate(p)) return 0;
     bytes = (size_t)p->width * p->height * 4;
-    file = fopen(p->rgba_path,"rb");
+    file = OpenAtlas(p->rgba_path);
     if (!file) return 0;
     pixels = malloc(bytes);
     if (!pixels) { fclose(file); return 0; }
@@ -222,6 +243,7 @@ int PcPort_Hd2dSpriteTextureOverride(const void *packet, int tpage, int clut,
         int j, min_u=255, min_v=255, max_u=0, max_v=0;
         GLuint selected_texture;
         if (e->packet != packet) continue;
+        if(diag && m->identity==UINT32_C(0xdb7d0105) && m->actor==1) diagnostics.player_queries++;
         e->seen=1;
         if (memcmp(packet,&e->snapshot,sizeof e->snapshot)) {
             if (diag) diagnostics.snapshot_miss++;
@@ -246,6 +268,7 @@ int PcPort_Hd2dSpriteTextureOverride(const void *packet, int tpage, int clut,
         e->consumed=1;
         if (diag) {
             diagnostics.accepted++;
+            if(m->identity==UINT32_C(0xdb7d0105) && m->actor==1) diagnostics.player_accepted++;
             if (diagnostics.accepted==1)
                 fprintf(stderr,"[hd2d-sprite-gpu] first_consumed texture=%u map=%d actor=%d frame=%d part=%d pending=%u\n",
                     selected_texture,m->map,m->actor,m->frame,m->part,(unsigned)pending_count);

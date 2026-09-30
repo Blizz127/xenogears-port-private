@@ -1,6 +1,6 @@
 --- a/src/gpu/PsyX_GPU.cpp
 +++ b/src/gpu/PsyX_GPU.cpp
-@@ -741,6 +741,10 @@
+@@ -745,6 +745,10 @@
  extern "C" int PcPort_Hd2dTextureOverride(int tpage, int clut, int u0, int v0, int u1, int v1,
  	unsigned int* out_gl_texture, float out_uv[4]) __attribute__((weak));
  
@@ -11,7 +11,7 @@
  static int g_hd2dPendingOn = 0;
  static float g_hd2dPendingUv[4];
  
-@@ -754,11 +758,14 @@
+@@ -758,11 +762,14 @@
  static void AddSplit(bool semiTrans, bool textured, ClutSemiMode clutSemiMode);
  
  /* Ask the hook; on 1 open the override split for this primitive. */
@@ -26,9 +26,9 @@
 +	if ((!sprite && (!PcPort_Hd2dTextureOverride ||
 +		!PcPort_Hd2dTextureOverride(tpage, clut, u0, v0, u1, v1, &texture, uv))) || texture == 0)
  		return false;
- 	memcpy(g_hd2dPendingUv, uv, sizeof(uv));
- 	g_hd2dPendingOn = 1;
-@@ -771,9 +778,9 @@
+ 	if (PcPort_Hd2dFrameBuffers)
+ 		GR_Hd2dPrimOverridden(); /* _xeno_hd2d_buffers: coverage bit 8 */
+@@ -777,9 +784,9 @@
  	return true;
  }
  
@@ -41,7 +41,7 @@
  		return false;
  	int u0 = 255, v0 = 255, u1 = 0, v1 = 0;
  	for (int i = 0; i < n; i++) {
-@@ -782,14 +789,14 @@
+@@ -788,14 +795,14 @@
  		if (uv[i][1] < v0) v0 = uv[i][1];
  		if (uv[i][1] > v1) v1 = uv[i][1];
  	}
@@ -63,7 +63,7 @@
  }
  
  /* Re-express the emitted retail texcoords as 0..255 across the primitive's
-@@ -1431,7 +1438,7 @@
+@@ -1454,7 +1461,7 @@
  		if (!IsNull(poly))
  		{
  			unsigned char* const hd2dUv[3] = { &poly->u0, &poly->u1, &poly->u2 }; /* _xeno_hd2d_hooks */
@@ -72,7 +72,7 @@
  			const bool splitClutSemi = hd2d ? false : BeginTexturedSplit(semiTrans);
  
  			GrVertex* firstVertex = &g_vertexBuffer[g_vertexIndex];
-@@ -1476,7 +1483,7 @@
+@@ -1499,7 +1506,7 @@
  		activeDrawEnv.tpage = poly->tpage;
  
  		unsigned char* const hd2dUv[4] = { &poly->u0, &poly->u1, &poly->u2, &poly->u3 }; /* _xeno_hd2d_hooks */
@@ -81,7 +81,7 @@
  		const bool splitClutSemi = hd2d ? false : BeginTexturedSplit(semiTrans);
  
  		GrVertex* firstVertex = &g_vertexBuffer[g_vertexIndex];
-@@ -1539,7 +1546,7 @@
+@@ -1562,7 +1569,7 @@
  		activeDrawEnv.tpage = poly->tpage;
  
  		unsigned char* const hd2dUv[3] = { &poly->u0, &poly->u1, &poly->u2 }; /* _xeno_hd2d_hooks */
@@ -90,7 +90,7 @@
  		const bool splitClutSemi = hd2d ? false : BeginTexturedSplit(semiTrans);
  
  		GrVertex* firstVertex = &g_vertexBuffer[g_vertexIndex];
-@@ -1582,7 +1589,7 @@
+@@ -1605,7 +1612,7 @@
  		activeDrawEnv.tpage = poly->tpage;
  
  		unsigned char* const hd2dUv[4] = { &poly->u0, &poly->u1, &poly->u2, &poly->u3 }; /* _xeno_hd2d_hooks */
@@ -99,7 +99,7 @@
  		const bool splitClutSemi = hd2d ? false : BeginTexturedSplit(semiTrans);
  
  		GrVertex* firstVertex = &g_vertexBuffer[g_vertexIndex];
-@@ -1643,7 +1650,7 @@
+@@ -1666,7 +1673,7 @@
  	{
  		SPRT* poly = (SPRT*)polyTag;
  
@@ -108,7 +108,7 @@
  		const bool splitClutSemi = hd2d ? false : BeginTexturedSplit(semiTrans);
  
  		GrVertex* firstVertex = &g_vertexBuffer[g_vertexIndex];
-@@ -1706,7 +1713,7 @@
+@@ -1729,7 +1736,7 @@
  	{
  		SPRT_8* poly = (SPRT_8*)polyTag;
  
@@ -117,7 +117,7 @@
  		const bool splitClutSemi = hd2d ? false : BeginTexturedSplit(semiTrans);
  
  		GrVertex* firstVertex = &g_vertexBuffer[g_vertexIndex];
-@@ -1749,7 +1756,7 @@
+@@ -1772,7 +1779,7 @@
  	{
  		SPRT_16* poly = (SPRT_16*)polyTag;
  

@@ -1,0 +1,83 @@
+--- a/src/render/PsyX_render.cpp
++++ b/src/render/PsyX_render.cpp
+@@ -344,9 +344,30 @@
+  * defines PcPort_Hd2dFrameBuffers. */
+ #if USE_OPENGL
+ /* Rename only the exported packet tagger; keep the owner include unchanged. */
++/* _hd2d_zz_scene_contacts */ /* packet refs and exact current 2D projection. */
++static const void* g_hd2dContactPacket[MAX_VERTEX_BUFFER_SIZE];
++static float g_hd2dContactOrtho[4];
++extern "C" void PcPort_Hd2dSceneContactsGpuBegin(void) __attribute__((weak));
++extern "C" void PcPort_Hd2dSceneContactGpuPart(const void*,const float*,unsigned) __attribute__((weak));
++#define GR_Hd2dSceneBegin GR_Hd2dSceneBeginRaw
++#define GR_Hd2dTagPrim GR_Hd2dTagPrimRaw
+ #define PsyX_Hd2dTagSpritePacket PsyX_Hd2dTagSpritePacketRaw
+ #include "../../../../src/psycross_hd2d_buffers.inl"
+ #undef PsyX_Hd2dTagSpritePacket
++#undef GR_Hd2dSceneBegin
++#undef GR_Hd2dTagPrim
++void GR_Hd2dSceneBegin(void)
++{
++    GR_Hd2dSceneBeginRaw();
++    memset(g_hd2dContactPacket,0,sizeof g_hd2dContactPacket);
++    if (PcPort_Hd2dSceneContactsGpuBegin) PcPort_Hd2dSceneContactsGpuBegin();
++}
++void GR_Hd2dTagPrim(int first,int end,int code,const void* packet)
++{
++    GR_Hd2dTagPrimRaw(first,end,code,packet);
++    if(first<0 || end>MAX_VERTEX_BUFFER_SIZE) return;
++    for(int i=first;i<end;++i) g_hd2dContactPacket[i]=packet;
++}
+ extern "C" void PsyX_Hd2dTagSpritePacket(const void* packet)
+ {
+     if (PsyX_Hd2dProducerActive()) PsyX_Hd2dTagSpritePacketRaw(packet);
+@@ -1280,6 +1301,13 @@
+ 
+ void GR_Ortho2D(float left, float right, float bottom, float top, float znear, float zfar)
+ {
++
++#if USE_OPENGL
++    if(PsyX_Hd2dProducerActive()) {
++        g_hd2dContactOrtho[0]=left;g_hd2dContactOrtho[1]=right;
++        g_hd2dContactOrtho[2]=bottom;g_hd2dContactOrtho[3]=top;
++    }
++#endif
+ 	float a = 2.0f / (right - left);
+ 	float b = 2.0f / (top - bottom);
+ 	float c = 2.0f / (znear - zfar);
+@@ -2490,6 +2515,35 @@
+ 
+ void GR_DrawTriangles(int start_vertex, int triangles)
+ {
++#if USE_OPENGL
++    if(PsyX_Hd2dProducerActive() && PcPort_Hd2dSceneContactGpuPart && g_xenoUploadedVertices &&
++       g_hd2dTags && start_vertex>=0 && triangles>0 && triangles<MAX_VERTEX_BUFFER_SIZE/3 &&
++       start_vertex<=MAX_VERTEX_BUFFER_SIZE-triangles*3) {
++        GLint fbo=0;glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING,&fbo);
++        if(fbo==0 && g_hd2dContactOrtho[1]>g_hd2dContactOrtho[0] &&
++           g_hd2dContactOrtho[2]>g_hd2dContactOrtho[3]) {
++            int end=start_vertex+triangles*3;
++            for(int i=start_vertex;i<end;) {
++                const void* packet=g_hd2dContactPacket[i];int next=i;
++                float b[4]={1,1,0,0};unsigned slot=g_hd2dTags[i].depth;bool valid=packet!=NULL;
++                while(next<end && g_hd2dContactPacket[next]==packet) {
++                    const GrVertex& v=g_xenoUploadedVertices[next];
++#if USE_PGXP
++                    if(v.scr_h>100.0f) valid=false;
++#endif
++                    float x=(v.x-g_hd2dContactOrtho[0])/(g_hd2dContactOrtho[1]-g_hd2dContactOrtho[0]);
++                    float y=(v.y-g_hd2dContactOrtho[2])/(g_hd2dContactOrtho[3]-g_hd2dContactOrtho[2]);
++                    if(!(x>=0 && x<=1 && y>=0 && y<=1)) valid=false;
++                    b[0]=(b[0]<x?b[0]:x);b[1]=(b[1]<y?b[1]:y);b[2]=(b[2]>x?b[2]:x);b[3]=(b[3]>y?b[3]:y);
++                    if(g_hd2dTags[next].depth!=slot) valid=false;
++                    ++next;
++                }
++                if(valid && next-i==6) PcPort_Hd2dSceneContactGpuPart(packet,b,slot);
++                i=next;
++            }
++        }
++    }
++#endif
+ #if USE_OPENGL
+ 	/* _xeno_fixed_uv_draw: keep the legacy one-call batch byte-for-byte when
+ 	 * disabled. When enabled, only polygon-marked triangles get exact rows;

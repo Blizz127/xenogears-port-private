@@ -540,10 +540,13 @@ void xg_plat_config_video(XgPlatVideoConfig* video)
                         "renderer backend has yet; running at the game's native 30 fps\n", fps);
 }
 
+extern void PcPort_Hd2dApplySettings(void) __attribute__((weak));
+
 void xg_plat_config_apply_runtime(void)
 {
     const char* v;
     int b;
+    if (PcPort_Hd2dApplySettings) PcPort_Hd2dApplySettings();
     if (xg_plat_config_get("game.speed"))
         xg_plat_timing_set_speed(xg_plat_config_int("game.speed", 1));
     if (xg_plat_config_get("game.fast_forward_speed"))

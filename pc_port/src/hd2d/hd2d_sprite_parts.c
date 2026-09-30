@@ -2,12 +2,20 @@
 #include "hd2d_sprite_profile.h"
 #include "hd2d_integration.h"
 #include <string.h>
+#include <stdlib.h>
+#include "hd2d_sprite_diagnostics.h"
+#include "hd2d_scene_contacts.h"
 #pragma weak PcPort_Hd2dSpriteSubmitPart
+#pragma weak PcPort_Hd2dSceneContactBegin
+#pragma weak PcPort_Hd2dSceneContactDraw
+#pragma weak PcPort_Hd2dSceneContactEnd
 
 static int SameKey(const PcPortHd2dPartMapping *a, const PcPortHd2dPartMapping *b)
 {
     return a->identity == b->identity && a->map == b->map &&
-        a->actor == b->actor && a->frame == b->frame && a->part == b->part;
+        a->actor == b->actor && a->frame == b->frame && a->part == b->part &&
+        a->tpage == b->tpage && a->clut == b->clut &&
+        !memcmp(a->u,b->u,4) && !memcmp(a->v,b->v,4);
 }
 int PcPort_Hd2dPartProfileValidate(const PcPortHd2dPartProfile *p)
 {
@@ -50,9 +58,25 @@ static int ProductionProfileValid(void)
     if (valid < 0) valid = PcPort_Hd2dPartProfileValidate(&hd2d_sprite_profile);
     return valid;
 }
+static PcPortHd2dPlayerPartDiagnostics player;
+int PcPort_Hd2dPlayerPartDiagnosticsGet(PcPortHd2dPlayerPartDiagnostics *out)
+{
+    const char *value;
+    if (!PcPort_Hd2dEnabled()) return 0;
+    value=getenv("XENO_HD2D_SPRITE_DIAG");
+    if(!value || strcmp(value,"1") || !out) return 0;
+    *out=player;return 1;
+}
+static int PlayerDiagnostic(const PcPortHd2dSpriteInfo *info)
+{
+    const char *value;
+    if(!info || info->identity!=UINT32_C(0xdb7d0105) || info->actor!=1) return 0;
+    value=getenv("XENO_HD2D_SPRITE_DIAG");return value && !strcmp(value,"1");
+}
 int PcPort_Hd2dSpriteBegin(const PcPortHd2dSpriteInfo *info)
 {
     if (!PcPort_Hd2dEnabled()) return 0;
+    if (PcPort_Hd2dOpeningActive() && PcPort_Hd2dSceneContactBegin) PcPort_Hd2dSceneContactBegin(info);
     return info && PcPort_Hd2dOpeningActive() && PcPort_Hd2dSpriteSubmitPart &&
         ProductionProfileValid();
 }
@@ -60,9 +84,39 @@ int PcPort_Hd2dSpriteDraw(const PcPortHd2dSpriteInfo *info, int part,
     const PcPortHd2dRetailQuad *quad)
 {
     const PcPortHd2dPartMapping *m;
+    int diag,result,map;size_t i;
     if (!PcPort_Hd2dEnabled()) return 0;
     if (!PcPort_Hd2dOpeningActive() || !PcPort_Hd2dSpriteSubmitPart || !ProductionProfileValid()) return 0;
-    m = LookupValidated(&hd2d_sprite_profile, PcPort_Hd2dCurrentMap(), info, part, quad);
-    return m ? PcPort_Hd2dSpriteSubmitPart(&hd2d_sprite_profile, m, quad) : 0;
+    if (PcPort_Hd2dSceneContactDraw) PcPort_Hd2dSceneContactDraw(info,part,quad);
+    map=PcPort_Hd2dCurrentMap();diag=PlayerDiagnostic(info);
+    if(diag) player.offered++;
+    m = LookupValidated(&hd2d_sprite_profile,map,info,part,quad);
+    result=m ? PcPort_Hd2dSpriteSubmitPart(&hd2d_sprite_profile,m,quad) : 0;
+    if(diag) {
+        if(result) player.registered++;
+        else {
+            player.fallback++;
+            if(m) player.transport_failed++;
+            else {
+                for(i=0;i<hd2d_sprite_profile.count;++i) {
+                    const PcPortHd2dPartMapping *v=hd2d_sprite_profile.parts+i;
+                    if(v->identity==info->identity && v->map==map && v->actor==info->actor && v->frame==info->frame) break;
+                }
+                if(i==hd2d_sprite_profile.count) player.missing_frame++;
+                else {
+                    for(i=0;i<hd2d_sprite_profile.count;++i) {
+                        const PcPortHd2dPartMapping *v=hd2d_sprite_profile.parts+i;
+                        if(v->identity==info->identity && v->map==map && v->actor==info->actor &&
+                           v->frame==info->frame && v->part==part) break;
+                    }
+                    if(i==hd2d_sprite_profile.count) player.missing_part++;
+                    else player.missing_uv++;
+                }
+            }
+        }
+    }
+    return result;
 }
-void PcPort_Hd2dSpriteEnd(const PcPortHd2dSpriteInfo *info) { (void)info; }
+void PcPort_Hd2dSpriteEnd(const PcPortHd2dSpriteInfo *info) {
+    if (PcPort_Hd2dEnabled() && PcPort_Hd2dSceneContactEnd) PcPort_Hd2dSceneContactEnd(info);
+}

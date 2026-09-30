@@ -16,7 +16,7 @@ XgHd2dPlan XgHd2d_Plan(const XgHd2dConfig *c, const XgHd2dFrame *f)
 {
     XgHd2dPlan p = {0};
     unsigned i;
-    const uint32_t depth = BIT(XG_HD2D_DOF) | BIT(XG_HD2D_FOG) | BIT(XG_HD2D_PARTICLES);
+    const uint32_t depth = BIT(XG_HD2D_DOF) | BIT(XG_HD2D_FOG) | BIT(XG_HD2D_PARTICLES) | BIT(XG_HD2D_RAYS);
     const uint32_t protection = (BIT(XG_HD2D_EFFECT_COUNT)-1);
     if (!c || !c->enabled || !f || !f->field_active || f->width <= 0 ||
         f->height <= 0 || f->x < 0 || f->y < 0 ||
@@ -70,7 +70,32 @@ XgHd2dPlan XgHd2d_Plan(const XgHd2dConfig *c, const XgHd2dFrame *f)
         }
         if (!valid) p.active &= ~BIT(XG_HD2D_PARTICLES);
     }
+    if (f->protection_mode!=XG_HD2D_PROTECTION_COVERAGE_BITS ||
+        f->light_count==0 || f->light_count>XG_HD2D_MAX_ITEMS) p.active &= ~BIT(XG_HD2D_RAYS);
+    if (p.active & BIT(XG_HD2D_RAYS)) {
+        unsigned valid=0;
+        for(i=0;i<f->light_count;++i) {
+            XgHd2dItem v=f->lights[i];
+            if(isfinite(v.x) && isfinite(v.y) && isfinite(v.z) && isfinite(v.w) &&
+               v.x>=0 && v.x<=1 && v.y>=0 && v.y<=1 && v.z>0 && v.w>0) ++valid;
+        }
+        if(!valid) p.active &= ~BIT(XG_HD2D_RAYS);
+    }
     if (f->shadow_count == 0 || f->shadow_count > XG_HD2D_MAX_ITEMS) p.active &= ~BIT(XG_HD2D_SHADOW);
+    if(f->shadow_mode==XG_HD2D_SHADOW_OT_CONTACT) {
+        unsigned valid=0;
+        if(f->depth_mode!=XG_HD2D_DEPTH_OT_ORDER ||
+           f->protection_mode!=XG_HD2D_PROTECTION_COVERAGE_BITS ||
+           !f->linear_depth_verified || !f->linear_depth_texture ||
+           !isfinite(f->order_scale) || f->order_scale<=0) p.active &= ~BIT(XG_HD2D_SHADOW);
+        if(f->shadow_count<=XG_HD2D_MAX_ITEMS) for(i=0;i<f->shadow_count;++i) {
+            XgHd2dItem v=f->shadows[i];float z=f->shadow_order[i];
+            if(isfinite(v.x) && isfinite(v.y) && isfinite(v.z) && isfinite(v.w) &&
+               v.x>=0 && v.x<=1 && v.y>=0 && v.y<=1 && v.z>0 && v.w>0 &&
+               isfinite(z) && z>=0 && z<=1) ++valid;
+        }
+        if(!valid) p.active &= ~BIT(XG_HD2D_SHADOW);
+    } else if(f->shadow_mode!=XG_HD2D_SHADOW_COMPOSITION) p.active &= ~BIT(XG_HD2D_SHADOW);
     if (f->particle_count == 0 || f->particle_count > XG_HD2D_MAX_ITEMS) p.active &= ~BIT(XG_HD2D_PARTICLES);
     for (i = 0; i < XG_HD2D_EFFECT_COUNT; ++i)
         if (!(p.active & BIT(i))) p.intensity[i] = 0.0f;

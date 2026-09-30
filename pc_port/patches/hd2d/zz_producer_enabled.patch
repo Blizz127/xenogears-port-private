@@ -1,0 +1,137 @@
+--- a/include/PsyX/PsyX_render.h
++++ b/include/PsyX/PsyX_render.h
+@@ -215,6 +215,12 @@
+  * PcPort_Hd2dFrameBuffers first: with no lane defining it, none runs. */
+ struct PcPortHd2dBuffers;
+ extern void			PcPort_Hd2dFrameBuffers(const struct PcPortHd2dBuffers* buffers) __attribute__((weak));
++/* _hd2d_zz_producer_enabled */ /* absent query preserves presence-only lanes. */
++extern int PcPort_Hd2dEnabled(void) __attribute__((weak));
++static inline int PsyX_Hd2dProducerActive(void)
++{
++    return PcPort_Hd2dFrameBuffers && (!PcPort_Hd2dEnabled || PcPort_Hd2dEnabled());
++}
+ extern void			PsyX_Hd2dTagSpritePacket(const void* packet);
+ extern void			GR_Hd2dSceneBegin(void);
+ extern void			GR_Hd2dClear(void);
+--- a/src/gpu/PsyX_GPU.cpp
++++ b/src/gpu/PsyX_GPU.cpp
+@@ -775,7 +775,7 @@
+ 	if ((!sprite && (!PcPort_Hd2dTextureOverride ||
+ 		!PcPort_Hd2dTextureOverride(tpage, clut, u0, v0, u1, v1, &texture, uv))) || texture == 0)
+ 		return false;
+-	if (PcPort_Hd2dFrameBuffers)
++	if (PsyX_Hd2dProducerActive())
+ 		GR_Hd2dPrimOverridden(); /* _xeno_hd2d_buffers: coverage bit 8 */
+ 	memcpy(g_hd2dPendingUv, uv, sizeof(uv));
+ 	g_hd2dPendingOn = 1;
+@@ -1025,7 +1025,7 @@
+ 	}
+ 
+ 	GR_DrawTriangles(split.startVertex, split.numVerts / 3);
+-	if (PcPort_Hd2dFrameBuffers)
++	if (PsyX_Hd2dProducerActive())
+ 		GR_Hd2dDrawSplitTags(split.startVertex, split.numVerts / 3); /* _xeno_hd2d_buffers: same batch, tag FBO */
+ 
+ 	if (split.debugText)
+@@ -1153,7 +1153,7 @@
+ #endif
+ 		const int hd2dFirst = g_vertexIndex; /* _xeno_hd2d_buffers */
+ 		ParsePrimitive(polyTag);
+-		if (PcPort_Hd2dFrameBuffers)
++		if (PsyX_Hd2dProducerActive())
+ 			GR_Hd2dTagPrim(hd2dFirst, g_vertexIndex, polyTag->code, polyTag);
+ 
+ 		GPUDrawSplit& lastSplit = g_splits[g_splitIndex];
+@@ -1179,7 +1179,7 @@
+ 				{
+ 					const int hd2dFirst = g_vertexIndex; /* _xeno_hd2d_buffers */
+ 					primLength = ParsePrimitive(reinterpret_cast<P_TAG*>(currentPacket));
+-					if (PcPort_Hd2dFrameBuffers)
++					if (PsyX_Hd2dProducerActive())
+ 						GR_Hd2dTagPrim(hd2dFirst, g_vertexIndex, reinterpret_cast<P_TAG*>(currentPacket)->code,
+ 							reinterpret_cast<void*>(basePacket));
+ 					currentPacket += (primLength + P_LEN) * sizeof(u_int);
+@@ -1190,7 +1190,7 @@
+ 					eprinterr("did not output valid primitive or ptag length is not valid (diff=%d)\n", endPacket-currentPacket);
+ 				}
+ 			}
+-			else if (PcPort_Hd2dFrameBuffers)
++			else if (PsyX_Hd2dProducerActive())
+ 			{
+ 				GR_Hd2dOtEntry(); /* _xeno_hd2d_buffers: an OT entry: depth counts OT slots */
+ 			}
+--- a/src/render/PsyX_render.cpp
++++ b/src/render/PsyX_render.cpp
+@@ -343,7 +343,14 @@
+ /* _xeno_hd2d_buffers: HOOK 4 producer (depth + coverage), inert unless a lane
+  * defines PcPort_Hd2dFrameBuffers. */
+ #if USE_OPENGL
++/* Rename only the exported packet tagger; keep the owner include unchanged. */
++#define PsyX_Hd2dTagSpritePacket PsyX_Hd2dTagSpritePacketRaw
+ #include "../../../../src/psycross_hd2d_buffers.inl"
++#undef PsyX_Hd2dTagSpritePacket
++extern "C" void PsyX_Hd2dTagSpritePacket(const void* packet)
++{
++    if (PsyX_Hd2dProducerActive()) PsyX_Hd2dTagSpritePacketRaw(packet);
++}
+ #endif
+ 
+ #if defined(RENDERER_OGL) || defined(RENDERER_OGLES)
+@@ -524,7 +531,7 @@
+ #endif
+ 	glClear(GL_DEPTH_BUFFER_BIT);
+ 	glClear(GL_STENCIL_BUFFER_BIT);
+-	if (PcPort_Hd2dFrameBuffers)
++	if (PsyX_Hd2dProducerActive())
+ 		GR_Hd2dSceneBegin(); /* _xeno_hd2d_buffers */
+ #endif
+ 
+@@ -1630,7 +1637,7 @@
+ #if USE_OPENGL
+ 	glClearColor(r / 255.0f, g / 255.0f, b / 255.0f, 1.0f);
+ 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+-	if (PcPort_Hd2dFrameBuffers)
++	if (PsyX_Hd2dProducerActive())
+ 		GR_Hd2dClear(); /* _xeno_hd2d_buffers */
+ #endif
+ }
+@@ -2174,7 +2181,7 @@
+ 	if (scissorEnabled)
+ 		glEnable(GL_SCISSOR_TEST);
+ 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+-	if (PcPort_Hd2dFrameBuffers)
++	if (PsyX_Hd2dProducerActive())
+ 		GR_Hd2dZeroRect(left, bottom, right, top); /* _xeno_hd2d_buffers: a VRAM copy is not a prim */
+ #endif
+ }
+@@ -2474,7 +2481,7 @@
+ 
+ #if USE_OPENGL
+ 	glBufferSubData(GL_ARRAY_BUFFER, 0, num_vertices * sizeof(GrVertex), vertices);
+-	if (PcPort_Hd2dFrameBuffers)
++	if (PsyX_Hd2dProducerActive())
+ 		GR_Hd2dUploadTags(num_vertices); /* _xeno_hd2d_buffers */
+ #else
+ #error
+--- a/src/PsyX_main.cpp
++++ b/src/PsyX_main.cpp
+@@ -1105,7 +1105,8 @@
+ 	GR_PresentVRAMDisplay(currentDispEnv.disp.x, currentDispEnv.disp.y,
+ 		currentDispEnv.disp.w, currentDispEnv.disp.h,
+ 		currentDispEnv.isrgb24, !g_GPUDisabledState);
+-	if (PcPort_Hd2dFrameBuffers) GR_Hd2dPresent(1, 1); /* _xeno_hd2d_buffers: HOOK 4, flags 0 (no primitives) */
++	if (PsyX_Hd2dProducerActive()) GR_Hd2dPresent(1, 1);
++	else if (PcPort_Hd2dFrameBuffers) PcPort_Hd2dFrameBuffers(NULL); /* _xeno_hd2d_buffers: HOOK 4, flags 0 (no primitives) */
+ 	if (PcPort_Hd2dPostProcess) { int dw, dh; SDL_GL_GetDrawableSize(g_window, &dw, &dh); PcPort_Hd2dPostProcess(1, dw, dh); } /* _xeno_hd2d_hooks */
+ 	PsyX_PresentHashLog(1); /* _xeno_hd2d_hooks */
+ 	PsyX_RecordPresentedFrame();
+@@ -1156,7 +1157,8 @@
+ 	}
+ 	g_xenoLastPresentFromVRAM = 0;
+ 
+-	if (PcPort_Hd2dFrameBuffers) GR_Hd2dPresent(0, hd2dVramShown); /* _xeno_hd2d_buffers: HOOK 4 */
++	if (PsyX_Hd2dProducerActive()) GR_Hd2dPresent(0, hd2dVramShown);
++	else if (PcPort_Hd2dFrameBuffers) PcPort_Hd2dFrameBuffers(NULL); /* _xeno_hd2d_buffers: HOOK 4 */
+ 	if (PcPort_Hd2dPostProcess) { int dw, dh; SDL_GL_GetDrawableSize(g_window, &dw, &dh); PcPort_Hd2dPostProcess(0, dw, dh); } /* _xeno_hd2d_hooks */
+ 	PsyX_PresentHashLog(0); /* _xeno_hd2d_hooks */
+ 	PsyX_RecordPresentedFrame();

@@ -46,3 +46,23 @@ all-effect crisp protection, raw maximum-slot/zero-slot distinction, ordinal
 fog direction, viewport-offset sampling and state restoration. Those fixtures
 establish backend behavior; integrated producer/current-frame evidence remains
 necessary before claiming runtime depth or coverage correctness.
+
+God rays are a restrained depth-aware radial highlight gather toward explicit
+projected light anchors. No anchor is inferred from the screen or world. Rays
+require certified depth and R8 bit coverage; protected and nearer samples
+attenuate shafts. This is screen-space light scattering, not volumetric world
+lighting. An absent valid light anchor leaves rays disabled.
+
+DOF uses 24 nearest samples with a circle-of-confusion-dependent radius (up to
+four times the former radius at full intensity); depth discontinuities and
+protected neighbours remain excluded. Bloom only gathers values above .72.
+Grade uses an original mathematical eight-knot amber luminance LUT with linear
+interpolation and retained chroma; no external image/LUT asset is used.
+
+Rays use at most the first two valid supplied light anchors in caller order.
+Other projected lights still contribute local lighting but no shafts. This
+bounds shaft gathers to 48 samples per pixel instead of 384 at sixteen lights,
+trading multiple-lamp scattering for two explicit key-light shafts. Hardware
+timing must be rerun for this implementation; sample counts are not timings.
+
+Native front-idle contact mode (`XG_HD2D_SHADOW_OT_CONTACT`) uses a complete six-part snapshot of the verified Fei190 pose. The GPU callback must observe every unchanged packet in the same raw OT slot and the current 2D projection before it offers a normalized bottom-centre bounding-box proxy. This proxy is an art-directed sprite contact, not recovered anatomical feet or physical world geometry. Unsupported poses, perspective packets, incomplete groups and changed packet lifetimes fail closed. The receiver requires map coverage and a valid OT depth no nearer than the sprite contact; sprite/UI/override pixels remain protected. CPU reuse/expiry tests and the GL nearer-receiver regression pass. The native field14 scene observed one such contact alongside all nine effects; other animation contacts remain disabled pending evidence.

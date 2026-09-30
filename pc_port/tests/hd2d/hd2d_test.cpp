@@ -184,6 +184,48 @@ int main() {
     assert(!(XgHd2d_Plan(&c,&f).active&bit(XG_HD2D_PARTICLES)));f.protection_verified=1;
     f.depth_mode=XG_HD2D_DEPTH_LINEAR;
     assert(!(XgHd2d_Plan(&c,&f).active&bit(XG_HD2D_PARTICLES)));f.depth_mode=XG_HD2D_DEPTH_OT_ORDER;
+    // Real OT contacts shade farther map receivers, never nearer occluders,
+    // invalid background, sprites/UI or overridden sprite pixels.
+    c.effect[XG_HD2D_PARTICLES].enabled=0;c.effect[XG_HD2D_SHADOW]={1,1};
+    f.shadow_count=1;f.shadows[0]={.5f,.5f,1,1};
+    f.shadow_mode=XG_HD2D_SHADOW_OT_CONTACT;f.shadow_order[0]=.5f;
+    gray();assert(XgHd2d_Present(&c,&f)==1);rendered=pixels();
+    assert(!std::memcmp(&rendered[(2*W+2)*4],&baseline[(2*W+2)*4],4)); // nearer
+    assert(std::memcmp(&rendered[(7*W+10)*4],&baseline[(7*W+10)*4],4)); // farther map
+    assert(!std::memcmp(&rendered[(2*W+20)*4],&baseline[(2*W+20)*4],4)); // clear
+    for(int k=0;k<4;++k) assert(!std::memcmp(&rendered[((6+k)*W+14)*4],&baseline[((6+k)*W+14)*4],4));
+    f.shadow_order[0]=NAN;assert(!(XgHd2d_Plan(&c,&f).active&bit(XG_HD2D_SHADOW)));
+    gray();assert(XgHd2d_Present(&c,&f)==0);assert(pixels()==baseline);
+    f.shadow_order[0]=.5f;f.linear_depth_verified=0;
+    assert(!(XgHd2d_Plan(&c,&f).active&bit(XG_HD2D_SHADOW)));f.linear_depth_verified=1;
+    f.shadow_mode=XG_HD2D_SHADOW_COMPOSITION;c.effect[XG_HD2D_SHADOW].enabled=0;
+    // Rays need explicit projected anchors, valid depth and bit coverage.
+    c.effect[XG_HD2D_PARTICLES].enabled=0;c.effect[XG_HD2D_RAYS]={1,1};
+    f.light_count=0;assert(!(XgHd2d_Plan(&c,&f).active&bit(XG_HD2D_RAYS)));
+    f.light_count=1;f.lights[0]={.8f,.5f,2,1};
+    f.protection_mode=XG_HD2D_PROTECTION_BINARY;
+    assert(!(XgHd2d_Plan(&c,&f).active&bit(XG_HD2D_RAYS)));
+    f.protection_mode=XG_HD2D_PROTECTION_COVERAGE_BITS;
+    std::fill(order.begin(),order.end(),2048);
+    glBindTexture(GL_TEXTURE_2D,f.linear_depth_texture);
+    glTexSubImage2D(GL_TEXTURE_2D,0,0,0,W,H,GL_RED,GL_UNSIGNED_SHORT,order.data());
+    auto shaftScene=[](){gray();glEnable(GL_SCISSOR_TEST);glScissor(24,8,6,8);
+        glClearColor(1,1,1,1);glClear(GL_COLOR_BUFFER_BIT);glDisable(GL_SCISSOR_TEST);};
+    shaftScene();auto shaftBefore=pixels();assert(XgHd2d_Present(&c,&f)==1);auto shaftAfter=pixels();
+    assert(shaftAfter!=shaftBefore);
+    for(int k=0;k<4;++k) assert(!std::memcmp(&shaftAfter[((6+k)*W+14)*4],&shaftBefore[((6+k)*W+14)*4],4));
+    f.light_count=2;f.lights[1]={.8f,.5f,2,.5f};
+    shaftScene();assert(XgHd2d_Present(&c,&f)==1);auto twoRays=pixels();
+    f.light_count=16;for(int i=2;i<16;++i)f.lights[i]={.1f,.5f,2,100};
+    shaftScene();assert(XgHd2d_Present(&c,&f)==1);assert(pixels()==twoRays); // bounded two anchors
+    f.light_count=1;
+    // No highlights: rays and bloom must not brighten a uniform midtone.
+    gray();assert(XgHd2d_Present(&c,&f)==1);assert(pixels()==baseline);
+    c.effect[XG_HD2D_RAYS].enabled=0;c.effect[XG_HD2D_BLOOM]={1,1};
+    gray();assert(XgHd2d_Present(&c,&f)==1);assert(pixels()==baseline);
+    c.effect[XG_HD2D_BLOOM].enabled=0;c.effect[XG_HD2D_GRADE]={1,1};
+    gray();assert(XgHd2d_Present(&c,&f)==1);rendered=pixels();
+    assert(rendered[0]>rendered[1] && rendered[1]>rendered[2]); // original amber LUT
     // Full drawable attachments sampled at exact viewport offset, not local0.
     f.x=4;f.y=3;f.width=16;f.height=12;f.auxiliary_width=W;f.auxiliary_height=H;
     for(int e=0;e<XG_HD2D_EFFECT_COUNT;++e)c.effect[e].enabled=0;

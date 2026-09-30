@@ -35,6 +35,7 @@ def drive(binary, qs, out, enabled, timeout, trace=False, settle=480, ready_mark
                XENO_HD2D_FIELD_POSE_FIXTURE=os.environ.get('XENO_HD2D_FIELD_POSE_FIXTURE','0'), XENO_HD2D_SPRITE_DIAG='1', XENO_HD2D_BATCH_STATS='1', XENO_HD2D_TRACE_PARTS=str(int(trace)), XENO_HD2D_OCTOPATH=str(enabled), XENO_HD2D_OPENING_MAPS='14',
                XENO_FEI_HD2D='0', XENO_PRESENT_HASH_LOG=str(out/'hash.txt'),
                XENO_HD2D_FIELD_PROBE=str(out/'probe.txt'))
+    env['XENO_HD2D_SCENE_PROBE']=str(out/'scene-items.txt')
     if test_input is not None: env['XENO_FIELD_TEST_INPUT']=test_input
     lines=[]
     with (out/'run.log').open('w') as log:
@@ -105,6 +106,7 @@ def main():
     p.add_argument('--pose-fixture',action='store_true',help='same observed actor10 pose in both binaries; separately labelled from organic gameplay')
     p.add_argument('--transform-fixture',action='store_true',help='same verified render inputs in both binaries; requires pose fixture')
     p.add_argument('--skip-trace',action='store_true',help='use accepted production ON records; diagnostic TRACE rejects active profiles')
+    p.add_argument('--scene-items-probe',action='store_true',help='observe real native item counts and effect policy without changing render inputs')
     a=p.parse_args()
     if a.transform_fixture and not a.pose_fixture: p.error('transform fixture requires pose fixture')
     if a.settle<120 or a.settle>3600: p.error('settle must be between120 and3600 presents')
@@ -125,7 +127,11 @@ def main():
         run(['gcc','-c','pc_port/tests/hd2d_field_transform_fixture.c',*flags,'-o',str(a.out/'transform.o')])
         shared.extend([str(a.out/'transform.o'),'-Wl,--wrap=func_8001E298'])
     run(['gcc',*shared,*[x for x in args if '/obj/hd2d__' not in x],'-o',str(baseline)])
-    run(['gcc',*shared,str(a.out/'probe.o'),*args,*['-Wl,--wrap='+h for h in HOOKS],'-o',str(lane)])
+    scene=[]
+    if a.scene_items_probe:
+        run(['gcc','-c','pc_port/tests/hd2d_scene_items_probe.c',*flags,'-o',str(a.out/'scene-items.o')])
+        scene=[str(a.out/'scene-items.o'),'-Wl,--wrap=PcPort_Hd2dSceneInputs']
+    run(['gcc',*shared,*scene,str(a.out/'probe.o'),*args,*['-Wl,--wrap='+h for h in HOOKS],'-o',str(lane)])
     for binary, expected in ((baseline,False),(lane,True)):
         symbols=run(['nm','--defined-only',str(binary)],capture_output=True,text=True).stdout
         for hook in HOOKS[:2]:

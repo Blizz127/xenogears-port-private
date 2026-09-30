@@ -8,7 +8,15 @@
 int g_GameSceneMapNum=2;
 static int field_calls,gl_calls,producer_calls,present_calls,registered,producer_mode;
 static XgHd2dFrame last;
+static void offer(void)
+{
+    PcPortHd2dBuffers b={31,32,640,480,
+        PC_PORT_HD2D_BUFFERS_DEPTH|PC_PORT_HD2D_BUFFERS_COVERAGE,4095};
+    PcPort_Hd2dFrameBuffers(&b);
+}
 static int reset_calls,values;
+static void (*toggle_controls[1+XG_HD2D_EFFECT_COUNT])(void);
+static int toggle_count;
 #ifndef HD2D_TEST_NO_VALUE_API
 static struct { const char *label; int (*get)(void); void (*set)(int); } controls[XG_HD2D_EFFECT_COUNT];
 #endif
@@ -17,6 +25,7 @@ void PcPort_DevMenuRegisterEnhancement(const char *label,int (*get)(void),void (
 {
     assert(label && get && toggle);
     if (!registered) assert(!strcmp(label,"HD-2D (Octopath style)"));
+    toggle_controls[toggle_count++]=toggle;
     ++registered;
 }
 #ifndef HD2D_TEST_NO_VALUE_API
@@ -52,9 +61,9 @@ int PcPort_Hd2dSceneInputs(int path,int width,int height,XgHd2dFrame *out)
 int main(void)
 {
 #ifdef HD2D_TEST_NO_VALUE_API
-    assert(registered==9 && !values);
+    assert(registered==1+XG_HD2D_EFFECT_COUNT && !values);
 #else
-    assert(registered==17 && values==8);
+    assert(registered==1+2*XG_HD2D_EFFECT_COUNT && values==XG_HD2D_EFFECT_COUNT);
     // Numeric changes neither toggle effects nor enable the master, and only
     // touch their own intensity. Percent rounding supports all integer inputs.
     for(int effect=0;effect<XG_HD2D_EFFECT_COUNT;++effect) {
@@ -77,6 +86,7 @@ int main(void)
     }
 #endif
     assert(!PcPort_Hd2dEnabled());
+    PcPort_Hd2dFrameBuffers((const PcPortHd2dBuffers*)1);
     assert(PcPort_Hd2dConfiguration()->map_count==2 &&
         PcPort_Hd2dConfiguration()->maps[0]==14 &&
         PcPort_Hd2dConfiguration()->maps[1]==1);
@@ -92,16 +102,25 @@ int main(void)
     PcPort_Hd2dSetEnabled(1);
     assert(reset_calls==1);
     PcPort_Hd2dSetEnabled(1); assert(reset_calls==1);
+    offer();
     PcPort_Hd2dPostProcess(0,640,480);
     assert(!gl_calls && !present_calls); /* unapproved map */
     assert(PcPort_Hd2dSetOpeningMaps(maps,2));
     g_GameSceneMapNum=12; PcPort_Hd2dPostProcess(0,640,480);
     assert(!gl_calls && !present_calls);
     g_GameSceneMapNum=2; producer_mode=1;
+    /* Unapproved-map offer was expired, even though optional SceneInputs
+     * attempts to supply untrusted attachment handles. */
     PcPort_Hd2dPostProcess(0,640,480);
-    assert(present_calls==1 && last.linear_depth_verified && last.protection_verified);
+    assert(present_calls==1 && !last.linear_depth_verified && !last.protection_verified);
+    offer();
+    PcPort_Hd2dPostProcess(0,640,480);
+    assert(present_calls==2 && last.linear_depth_verified && last.protection_verified);
+    assert(last.linear_depth_texture==31 && last.protection_texture==32);
+    assert(last.depth_mode==XG_HD2D_DEPTH_OT_ORDER && last.order_scale==65535.0f/4095);
+    offer();
     PcPort_Hd2dPostProcess(1,640,480);
-    assert(present_calls==2 && producer_calls==1);
+    assert(present_calls==3 && producer_calls==2);
     assert(!last.linear_depth_verified && !last.protection_verified);
     producer_mode=2; PcPort_Hd2dPostProcess(0,640,480);
     assert(!last.linear_depth_verified && !last.protection_verified); /* wrong map */
@@ -110,6 +129,6 @@ int main(void)
     unsigned texture=99; float uv[]={1,2,3,4};
     assert(!PcPort_Hd2dTextureOverride(1,2,3,4,5,6,&texture,uv));
     assert(texture==99 && uv[0]==1 && uv[3]==4);
-    puts("HD2D bridge: Off bypass, scope, menu registration, intensity and current-frame inputs PASS");
+    puts("HD2D bridge: Off bypass, scope expiry, numeric rows and actual consume-once HOOK4 inputs PASS");
     return 0;
 }

@@ -36,6 +36,7 @@ def main():
     p.add_argument('--parts',type=int,default=6)
     p.add_argument('--profile-header',type=Path,help='private draft header; compile private parts object only')
     p.add_argument('--prepare-only',action='store_true',help='compile/relink without launching graphics')
+    p.add_argument('--isolate-player',action='store_true',help='Fei-only render-input fixture: omit NPC sprites equally in all blocks; not organic/full-cast evidence')
     p.add_argument('--head-crop-trials',action='store_true',help='test-only predetermined UV trials; never production evidence')
     a=p.parse_args()
     if not(0<=a.map_id<1024 and -1<=a.actor<=65535 and 0<=a.frame<32768 and 1<=a.parts<=64 and 0<=a.fnv<=0xffffffff):
@@ -59,6 +60,11 @@ def main():
     run(['gcc','-c','pc_port/tests/hd2d_footprint_probe.c',*shlex.split((build/'port-source.cflags').read_text()),'-o',str(out/'probe.o')],check=True)
     hooks=['PcPort_Hd2dSpriteBegin','PcPort_Hd2dSpriteDraw','PcPort_Hd2dSpriteEnd','PcPort_Hd2dPostProcess','XgHd2d_Present','PcPort_Hd2dSpriteTextureOverride']
     objects=[str(out/'probe.o')]
+    if a.isolate_player:
+        run(['gcc','-c','pc_port/tests/hd2d_footprint_scene_fixture.c',*shlex.split((build/'port-source.cflags').read_text()),'-o',str(out/'scene-fixture.o')],check=True)
+        objects.append(str(out/'scene-fixture.o'))
+        hooks.append('func_8001E298')
+        env['XENO_HD2D_FOOTPRINT_ISOLATE_PLAYER']='1'
     if a.head_crop_trials:
         run(['gcc','-c','pc_port/tests/hd2d_head_crop_probe.c',*shlex.split((build/'port-source.cflags').read_text()),'-o',str(out/'crop-probe.o')],check=True)
         objects.append(str(out/'crop-probe.o'))
@@ -67,6 +73,7 @@ def main():
     link_args=(build/'xeno-port.link-args').read_text().splitlines()
     provenance={'map':a.map_id,'actor':a.actor,'fnv':hex(a.fnv),'frame':a.frame,'parts':a.parts,
                 'checkpoint':str(a.checkpoint.resolve()),'checkpoint_sha256':checkpoint_info['sha256'],'tolerance_pixels':1,'profile':'production'}
+    provenance['scene_scope']='Fei-only render-input fixture; NPC sprites omitted equally; field geometry/occlusion unchanged' if a.isolate_player else 'organic gameplay'
     if a.profile_header:
         include=out/'profile'; include.mkdir()
         header=include/'hd2d_sprite_profile.h'; shutil.copyfile(a.profile_header,header)

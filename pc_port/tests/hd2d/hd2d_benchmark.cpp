@@ -81,19 +81,21 @@ int main(int argc, char **argv) {
         frame.protection_mode=XG_HD2D_PROTECTION_COVERAGE_BITS;
         frame.order_scale=65535.0f/4095.0f;
         frame.auxiliary_width=width;frame.auxiliary_height=height;
-        std::puts("mode=ot_order raw_R16_slots=0..4095 zero_background larger_nearer physical_particles=disabled");
+        frame.particle_mode=XG_HD2D_PARTICLE_OT_ORDER;
+        std::puts("mode=ot_order raw_R16_slots=0..4095 zero_background larger_nearer particles=explicit_order_units");
         std::puts("scope=synthetic_composition_only not_in_game_or_whole_gpu_performance");
     }
+    std::puts("fixture_items=16 lights_shadows_particles ray_anchors=2_first_valid warmup=30");
     frame.light_count=frame.shadow_count=frame.particle_count=XG_HD2D_MAX_ITEMS;
     for (int i=0;i<XG_HD2D_MAX_ITEMS;++i) {
         float x=float(i+1)/(XG_HD2D_MAX_ITEMS+1);
         frame.lights[i]={x,0.4f,0.1f,0.8f};
         frame.shadows[i]={x,0.3f,0.025f,0.012f};
-        frame.particles[i]={x,0.7f,15.0f,0.003f};
+        frame.particles[i]={x,0.7f,ordered ? 0.25f : 15.0f,0.003f};
     }
     if(ordered) {
         config.enabled=1;
-        const unsigned expected=((1u<<XG_HD2D_EFFECT_COUNT)-1u)&~(1u<<XG_HD2D_PARTICLES);
+        const unsigned expected=((1u<<XG_HD2D_EFFECT_COUNT)-1u);
         if(XgHd2d_Plan(&config,&frame).active!=expected) {
             std::fputs("OT fixture did not enable exactly the supported effects\n",stderr);
             glDeleteTextures(2,textures);SDL_GL_DeleteContext(context);
@@ -119,7 +121,7 @@ int main(int argc, char **argv) {
         }
         if (!result) {
             std::sort(times.begin(),times.end());
-            std::printf("%s,%d,%d,%d,%.6f,%.6f\n",enabled ? (ordered ? "ot_order_supported_effects" : "all_effects") : "off",
+            std::printf("%s,%d,%d,%d,%.6f,%.6f\n",enabled ? (ordered ? "ot_order_all_9_effects" : "all_effects") : "off",
                 width,height,samples,times[samples/2],times[(samples*95-1)/100]);
         }
     }
