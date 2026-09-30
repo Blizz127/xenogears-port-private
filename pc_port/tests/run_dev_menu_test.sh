@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Dev menu controller / input-capture test (pc_port/tests/dev_menu_test.cpp):
-# SDL virtual pads through the patched PsyX_pad.cpp and port_dev_menu.c.
+# SDL virtual pads through the patched PsyX_pad.cpp and port_dev_menu.c, and
+# numeric enhancement rows persisted through pc_port/src/plat/xg_plat_config.c.
 # Needs the patched PsyCross tree (pc_port/build_port.sh); run in xenogears-dev.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
@@ -24,5 +25,9 @@ g++ -std=gnu++17 -O1 -g -Wall "${INC[@]}" $SDL_CFLAGS -c pc_port/tests/dev_menu_
 gcc -std=gnu17 -O1 -g -Wall -Wextra -Ipc_port/src -c pc_port/src/port_dev_menu.c -o "$OUT/menu.o"
 gcc -std=gnu17 -O1 -g -Wall -Wextra -Ipc_port/src -c pc_port/src/port_dev_menu_warps.c -o "$OUT/warps.o"
 gcc -std=gnu17 -O1 -g -Wall -Wextra -Ipc_port/src -c pc_port/src/port_dev_menu_steps.c -o "$OUT/steps.o"
-g++ "$OUT/test.o" "$OUT/PsyX_pad.o" "$OUT/menu.o" "$OUT/warps.o" "$OUT/steps.o" $(pkg-config --libs sdl2) -o "$OUT/dev_menu_test"
-SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy timeout 60s "$OUT/dev_menu_test"
+# the real config layer: numeric enhancement rows persist through it
+gcc -std=gnu17 -O1 -g -Ipc_port/src -c pc_port/src/plat/xg_plat_config.c -o "$OUT/config.o"
+g++ "$OUT/test.o" "$OUT/PsyX_pad.o" "$OUT/menu.o" "$OUT/warps.o" "$OUT/steps.o" "$OUT/config.o" $(pkg-config --libs sdl2) \
+    -o "$OUT/dev_menu_test"
+# persisted values go to $OUT/config.ini (XENO_CONFIG), never the user's file
+DEV_MENU_TEST_DIR="$OUT" SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy timeout 60s "$OUT/dev_menu_test"

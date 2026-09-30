@@ -36,7 +36,7 @@ static unsigned s_replayBits;
 
 /* ---- rows ------------------------------------------------------------- */
 #define MAX_ROWS 24
-typedef struct { char label[48]; int selectable; int action; int arg; } Row;
+typedef struct { char label[72]; int selectable; int action; int arg; } Row;
 enum {
     ACT_NONE, ACT_PAGE, ACT_AREA, ACT_WARP, ACT_FINISH, ACT_STEP,
     ACT_GOD, ACT_BATTLES, ACT_HEAL, ACT_GOLD, ACT_ITEMS,
@@ -69,31 +69,129 @@ static int area_seen_before(int i, const char *area)
 static const char *on_off(int (*get)(void)) { return get && get() ? "ON" : "OFF"; }
 
 /* ---- enhancement registry --------------------------------------------- */
-typedef struct { char label[41]; int (*get)(void); void (*toggle)(void); } Enhancement;
+/* A toggle row (toggle != NULL or numeric == 0) or a numeric row (set, range,
+ * step, unit). Both kinds share the table and its order. */
+typedef struct {
+    char label[41];
+    int (*get)(void);
+    void (*toggle)(void);
+    int numeric;
+    void (*set)(int);
+    int min, max, step;
+    char unit[16];
+} Enhancement;
 static Enhancement s_enh[PC_DEV_MAX_ENHANCEMENTS];
 static int s_enhCount;
+static int s_configReady; /* PcPort_DevMenuInit ran: the config file is loaded */
 
-void PcPort_DevMenuRegisterEnhancement(const char *label, int (*get)(void), void (*toggle)(void))
+/* The table entry for label: an existing one (replaced), else a new one;
+ * NULL when the table is full. */
+static Enhancement *enh_slot(const char *label)
 {
     int i;
-    if (!label || !*label) return;
     for (i = 0; i < s_enhCount; i++)
-        if (!strncmp(s_enh[i].label, label, sizeof s_enh[i].label - 1)) {
-            s_enh[i].get = get;
-            s_enh[i].toggle = toggle;
-            return;
-        }
+        if (!strncmp(s_enh[i].label, label, sizeof s_enh[i].label - 1)) return &s_enh[i];
     if (s_enhCount >= PC_DEV_MAX_ENHANCEMENTS) {
         fprintf(stderr, "[DEV_MENU] enhancement '%s' refused: %d already registered\n",
                 label, PC_DEV_MAX_ENHANCEMENTS);
-        return;
+        return NULL;
     }
+    memset(&s_enh[s_enhCount], 0, sizeof s_enh[s_enhCount]);
     snprintf(s_enh[s_enhCount].label, sizeof s_enh[s_enhCount].label, "%s", label);
-    s_enh[s_enhCount].get = get;
-    s_enh[s_enhCount].toggle = toggle;
-    s_enhCount++;
+    return &s_enh[s_enhCount++];
+}
+
+void PcPort_DevMenuRegisterEnhancement(const char *label, int (*get)(void), void (*toggle)(void))
+{
+    Enhancement *e;
+    if (!label || !*label || !(e = enh_slot(label))) return;
+    e->get = get;
+    e->toggle = toggle;
+    e->numeric = 0;
+    e->set = NULL;
 }
 int PcPort_DevMenuEnhancementCount(void) { return s_enhCount; }
+
+/* config key: "enhancements." + the label lower-cased, non-alphanumerics '_' */
+static void enh_config_key(const Enhancement *e, char *out, size_t n)
+{
+    size_t i, o = (size_t)snprintf(out, n, "enhancements.");
+    for (i = 0; e->label[i] && o + 1 < n; i++) {
+        char c = e->label[i];
+        if (c >= 'A' && c <= 'Z') c = (char)(c - 'A' + 'a');
+        else if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'))) c = '_';
+        out[o++] = c;
+    }
+    out[o] = '\0';
+}
+
+static int enh_clamp(const Enhancement *e, long long v)
+{
+    return v < e->min ? e->min : v > e->max ? e->max : (int)v;
+}
+
+/* Apply the value stored in config.ini (clamped) through set(). */
+static void enh_apply_stored(Enhancement *e)
+{
+    char key[64], *end;
+    const char *v;
+    long long n;
+    if (!e->numeric || !e->set) return;
+    enh_config_key(e, key, sizeof key);
+    v = xg_plat_config_get(key);
+    if (!v || !*v) return;
+    n = strtoll(v, &end, 0);
+    if (end == v || *end) {
+        fprintf(stderr, "[DEV_MENU] config %s = '%s' is not a number; ignored\n", key, v);
+        return;
+    }
+    e->set(enh_clamp(e, n));
+    fprintf(stderr, "[DEV_MENU] enhancement '%s' = %d (from config %s)\n", e->label, enh_clamp(e, n), key);
+}
+
+/* Set a numeric row (clamped) and save it under [enhancements]. */
+static void enh_set(Enhancement *e, long long value)
+{
+    char key[64], text[16];
+    int v = enh_clamp(e, value);
+    e->set(v);
+    enh_config_key(e, key, sizeof key);
+    snprintf(text, sizeof text, "%d", v);
+    if (!xg_plat_config_persist(key, text))
+        fprintf(stderr, "[DEV_MENU] could not save %s = %s\n", key, text);
+    fprintf(stderr, "[DEV_MENU] enhancement '%s' = %d%s\n", e->label, v, e->unit);
+}
+
+void PcPort_DevMenuRegisterEnhancementValue(const char *label, int (*get)(void), void (*set)(int),
+                                            int min, int max, int step, const char *unit)
+{
+    Enhancement *e;
+    if (!label || !*label) return;
+    if (!get || !set || min > max || step <= 0) {
+        fprintf(stderr, "[DEV_MENU] numeric enhancement '%s' refused: needs get, set, min <= max, step > 0\n",
+                label);
+        return;
+    }
+    if (!(e = enh_slot(label))) return;
+    e->get = get;
+    e->toggle = NULL;
+    e->numeric = 1;
+    e->set = set;
+    e->min = min;
+    e->max = max;
+    e->step = step;
+    snprintf(e->unit, sizeof e->unit, "%s", unit ? unit : "");
+    if (s_configReady) enh_apply_stored(e);
+}
+
+/* Left/Right (dir -1/+1) or Confirm (dir 0: step up, wrap max -> min). */
+static void enh_adjust(Enhancement *e, int dir)
+{
+    long long cur = e->get(), next;
+    if (dir == 0) next = cur >= e->max ? e->min : cur + e->step;
+    else next = cur + (long long)dir * e->step;
+    if (enh_clamp(e, next) != cur) enh_set(e, next);
+}
 
 static void build_rows(void)
 {
@@ -167,8 +265,15 @@ static void build_rows(void)
     case PAGE_ENHANCE:
         if (s_host && s_host->hd2d_available && s_host->hd2d_available())
             add_row(1, ACT_HD2D, 0, "HD-2D FEI", on_off(s_host->hd2d_on));
-        for (i = 0; i < s_enhCount; i++)
-            add_row(1, ACT_ENHANCEMENT, i, s_enh[i].label, s_enh[i].get ? on_off(s_enh[i].get) : NULL);
+        for (i = 0; i < s_enhCount; i++) {
+            char value[32];
+            if (s_enh[i].numeric) {
+                snprintf(value, sizeof value, "%d%s", s_enh[i].get(), s_enh[i].unit);
+                add_row(1, ACT_ENHANCEMENT, i, s_enh[i].label, value);
+            } else {
+                add_row(1, ACT_ENHANCEMENT, i, s_enh[i].label, s_enh[i].get ? on_off(s_enh[i].get) : NULL);
+            }
+        }
         if (!s_rowCount) add_row(0, ACT_NONE, 0, "(NONE AVAILABLE)", NULL);
         break;
     }
@@ -198,6 +303,11 @@ void PcPort_DevMenuInit(void)
     s_padPrev = 0;
     s_padInstance = -1;
     s_replay = 0;
+    s_configReady = 1;
+    {   /* numeric enhancement rows registered before the config was loaded */
+        int i;
+        for (i = 0; i < s_enhCount; i++) enh_apply_stored(&s_enh[i]);
+    }
     if (on)
         fprintf(stderr, "[DEV_MENU] enabled: Select+Start on one pad or F8 opens it\n");
     else
@@ -378,11 +488,26 @@ static void activate(void)
         fprintf(stderr, "[DEV_MENU] HD-2D Fei toggled\n");
         break;
     case ACT_ENHANCEMENT:
+        if (r.arg >= 0 && r.arg < s_enhCount && s_enh[r.arg].numeric) {
+            enh_adjust(&s_enh[r.arg], 0);
+            break;
+        }
         if (r.arg >= 0 && r.arg < s_enhCount && s_enh[r.arg].toggle) s_enh[r.arg].toggle();
         fprintf(stderr, "[DEV_MENU] enhancement '%s' toggled\n",
                 r.arg >= 0 && r.arg < s_enhCount ? s_enh[r.arg].label : "?");
         break;
     }
+}
+
+/* Left/Right on the cursor row: steps a numeric enhancement, else nothing. */
+static void adjust(int dir)
+{
+    Row r;
+    build_rows();
+    if (s_cursor < 0 || s_cursor >= s_rowCount || !s_rows[s_cursor].selectable) return;
+    r = s_rows[s_cursor];
+    if (r.action == ACT_ENHANCEMENT && r.arg >= 0 && r.arg < s_enhCount && s_enh[r.arg].numeric)
+        enh_adjust(&s_enh[r.arg], dir);
 }
 
 int PcPort_DevMenuKey(int key, int pressed)
@@ -398,6 +523,8 @@ int PcPort_DevMenuKey(int key, int pressed)
     else if (key == PC_DEV_DOWN) move_cursor(1);
     else if (key == PC_DEV_BACK) go_back();
     else if (key == PC_DEV_ACCEPT) activate();
+    else if (key == PC_DEV_LEFT) adjust(-1);
+    else if (key == PC_DEV_RIGHT) adjust(1);
     return 1;
 }
 
@@ -467,6 +594,8 @@ unsigned PcPort_DevMenuPad(unsigned bits, int instance, int held_any, unsigned n
     if (s_open) {
         if (pressed & PC_DEV_PAD_UP) move_cursor(-1);
         if (pressed & PC_DEV_PAD_DOWN) move_cursor(1);
+        if (pressed & PC_DEV_PAD_LEFT) adjust(-1);
+        if (pressed & PC_DEV_PAD_RIGHT) adjust(1);
         if (pressed & PC_DEV_PAD_B) go_back();
         else if (pressed & PC_DEV_PAD_A) activate();
         return result | PC_DEV_BLOCK_ALL;

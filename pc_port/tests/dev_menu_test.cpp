@@ -9,8 +9,13 @@
 #include <string.h>
 #include <stdarg.h>
 
+#include <sys/stat.h>
+#include <unistd.h>
+
 #include "PsyX/PsyX_public.h"
 #include "port_dev_menu.h"
+#include "../include/xg_plat/config.h"
+#include "../include/xg_plat/input.h"
 
 int PsyX_Pad_InitSystem();
 void PsyX_Pad_Event_ControllerAdded(Sint32 deviceId);
@@ -34,12 +39,14 @@ void PsyX_Log_Warning(const char* fmt, ...) { va_list ap; va_start(ap, fmt); vlo
 void PsyX_Log_Error(const char* fmt, ...) { va_list ap; va_start(ap, fmt); vlog(fmt, ap); va_end(ap); }
 void PsyX_Log_Success(const char* fmt, ...) { va_list ap; va_start(ap, fmt); vlog(fmt, ap); va_end(ap); }
 
-/* Config: only cheats.dev_menu is read by the menu. */
-static int s_cfgDevMenu = 0;
-int xg_plat_config_int(const char* key, int fallback)
-{
-    return strcmp(key, "cheats.dev_menu") == 0 ? s_cfgDevMenu : fallback;
-}
+/* Config: the real xg_plat_config.c (pc_port/src/plat), writing to a test
+ * file ($XENO_CONFIG, set in main); these are the backends its runtime
+ * apply step would drive, unused here. */
+int xg_plat_audio_set_user_volume(int percent) { (void)percent; return 1; }
+int xg_plat_input_bind_key(XgPlatButton button, const char* key_name) { (void)button; (void)key_name; return 1; }
+const char* xg_plat_input_button_name(XgPlatButton button) { (void)button; return NULL; }
+void xg_plat_timing_set_fast_forward_speed(int multiplier) { (void)multiplier; }
+void xg_plat_timing_set_speed(int multiplier) { (void)multiplier; }
 
 /* Every game mutation goes through the cheat queue: record it. */
 static int s_queued = 0;
@@ -74,6 +81,7 @@ static const PcPortDevMenuHost s_host = {
 };
 
 enum { PS_SELECT = 0x1, PS_START = 0x8, PS_UP = 0x10, PS_DOWN = 0x40, PS_CROSS = 0x4000, PS_CIRCLE = 0x2000 };
+static char s_cfgFile[512];
 
 static int s_fail = 0;
 static unsigned char s_pad[2][0x22];
@@ -152,6 +160,47 @@ static int enh_b_get(void) { return s_enhB; }
 static void enh_b_toggle(void) { s_enhB ^= 1; s_enhCalls++; }
 static int enh_const_on(void) { return 1; }
 static void enh_noop(void) { s_enhCalls++; }
+/* Numeric enhancement rows. */
+static int s_valA = 0, s_valB = 0, s_setA = 0, s_setB = 0;
+static int val_a_get(void) { return s_valA; }
+static void val_a_set(int v) { s_valA = v; s_setA++; }
+static int val_b_get(void) { return s_valB; }
+static void val_b_set(int v) { s_valB = v; s_setB++; }
+static int s_ctorVal = 0, s_ctorSets = 0;
+static int ctor_get(void) { return s_ctorVal; }
+static void ctor_set(int v) { s_ctorVal = v; s_ctorSets++; }
+/* Constructor registration (DEV_MENU_TEST_CTOR=1 child run): before main,
+ * before the config is loaded and before PcPort_DevMenuInit. */
+__attribute__((constructor)) static void ctor_register(void)
+{
+    if (getenv("DEV_MENU_TEST_CTOR"))
+        PcPort_DevMenuRegisterEnhancementValue("CTOR FX", ctor_get, ctor_set, 0, 10, 1, "PX");
+}
+static int ctor_main(void)
+{
+    CHECK(PcPort_DevMenuEnhancementCount() == 1 && s_ctorSets == 0,
+          "ctor: registered from a constructor, nothing applied before the config is loaded");
+    xg_plat_config_parse("[enhancements]\nctor_fx = 42\n");   /* port_main's config load */
+    PcPort_DevMenuInit();
+    CHECK(s_ctorSets == 1 && s_ctorVal == 10, "ctor: stored 42 applied at PcPort_DevMenuInit, clamped to 10");
+    CHECK(PcPort_DevMenuEnhancementCount() == 1, "ctor: one numeric row");
+    printf("dev_menu_test ctor: %s (%d failure%s)\n", s_fail ? "FAIL" : "PASS", s_fail, s_fail == 1 ? "" : "s");
+    return s_fail ? 1 : 0;
+}
+static char* read_file(const char* path)
+{
+    FILE* f = fopen(path, "rb");
+    static char buf[8192];
+    size_t n;
+    buf[0] = 0;
+    if (!f) return buf;
+    n = fread(buf, 1, sizeof buf - 1, f);
+    buf[n] = 0;
+    fclose(f);
+    return buf;
+}
+static const char* cfg(const char* key) { const char* v = xg_plat_config_get(key); return v ? v : "(null)"; }
+
 static void open_enhancements(void)
 {
     PcPort_DevMenuKey(PC_DEV_OPEN, 1);
@@ -166,6 +215,16 @@ int main(void)
     VPad pad, padB;
     setvbuf(stdout, NULL, _IONBF, 0);
     s_verbose = getenv("DEV_MENU_TEST_VERBOSE") != NULL;
+    if (getenv("DEV_MENU_TEST_CTOR")) return ctor_main();
+    {   /* persisted values go to a test config, never the user's */
+        const char* dir = getenv("DEV_MENU_TEST_DIR");
+        static char tmpl[] = "/tmp/dev-menu-cfg.XXXXXX";
+        if (!dir || !*dir) dir = mkdtemp(tmpl);
+        snprintf(s_cfgFile, sizeof s_cfgFile, "%s/config.ini", dir);
+        unlink(s_cfgFile);
+        setenv("XENO_CONFIG", s_cfgFile, 1);
+        setenv("XDG_CONFIG_HOME", dir, 1);
+    }
     mapping();
     unsetenv("XENO_DEV_MENU");
     unsetenv("XENO_CHEATS");
@@ -189,10 +248,10 @@ int main(void)
     setenv("XENO_DEV_MENU", "1", 1); setenv("XENO_CHEATS", "0", 1);
     PcPort_DevMenuInit();
     CHECK(!PcPort_DevMenuEnabled(), "XENO_DEV_MENU=1 + XENO_CHEATS=0: hard-disabled");
-    unsetenv("XENO_CHEATS"); unsetenv("XENO_DEV_MENU"); s_cfgDevMenu = 1;
+    unsetenv("XENO_CHEATS"); unsetenv("XENO_DEV_MENU"); xg_plat_config_parse("[cheats]\ndev_menu = on\n");
     PcPort_DevMenuInit();
     CHECK(PcPort_DevMenuEnabled(), "config [cheats] dev_menu = on: enabled");
-    s_cfgDevMenu = 0; setenv("XENO_DEV_MENU", "1", 1);
+    xg_plat_config_parse(""); setenv("XENO_DEV_MENU", "1", 1);
     PcPort_DevMenuInit();
     CHECK(PcPort_DevMenuEnabled(), "XENO_DEV_MENU=1: enabled");
 
@@ -425,6 +484,107 @@ int main(void)
     PcPort_DevMenuKey(PC_DEV_OPEN, 1);
     CHECK(!PcPort_DevMenuOpen(), "F8 closes");
     frame(); frame();
+
+    printf("-- numeric enhancement rows (PcPort_DevMenuRegisterEnhancementValue)\n");
+    xg_plat_config_parse("[enhancements]\nhd_2d_bloom = 250\n");
+    PcPort_DevMenuRegisterEnhancementValue("HD-2D BLOOM", val_b_get, val_b_set, 0, 200, 10, "%");
+    CHECK(PcPort_DevMenuEnhancementCount() == PC_DEV_MAX_ENHANCEMENTS && s_setB == 1 && s_valB == 200,
+          "re-registering a toggle label as numeric replaces that row; stored 250 applied through set, clamped to 200");
+    PcPort_DevMenuRegisterEnhancementValue("HD-2D AREA", val_a_get, val_a_set, -3, 3, 2, NULL);
+    CHECK(s_setA == 0 && PcPort_DevMenuEnhancementCount() == PC_DEV_MAX_ENHANCEMENTS,
+          "no stored value: set not called, still %d entries", PC_DEV_MAX_ENHANCEMENTS);
+    open_enhancements();
+    CHECK(!strcmp(row(1), "HD-2D AREA: 0") && !strcmp(row(2), "HD-2D BLOOM: 200%") && !strcmp(row(3), "FX 0"),
+          "display LABEL: <value><unit>: %s / %s / %s", row(1), row(2), row(3));
+    PcPort_DevMenuKey(PC_DEV_DOWN, 1); PcPort_DevMenuKey(PC_DEV_DOWN, 1);
+    CHECK(PcPort_DevMenuCursor() == 2, "cursor on HD-2D BLOOM");
+    PcPort_DevMenuKey(PC_DEV_LEFT, 1);
+    CHECK(s_valB == 190 && !strcmp(row(2), "HD-2D BLOOM: 190%"), "Left steps down by 10: %s", row(2));
+    CHECK(!strcmp(cfg("enhancements.hd_2d_bloom"), "190") && strstr(read_file(s_cfgFile), "[enhancements]") &&
+          strstr(read_file(s_cfgFile), "hd_2d_bloom = 190"),
+          "saved as enhancements.hd_2d_bloom = 190 in %s", s_cfgFile);
+    PcPort_DevMenuKey(PC_DEV_RIGHT, 1);
+    {
+        int sets = s_setB;
+        PcPort_DevMenuKey(PC_DEV_RIGHT, 1);
+        CHECK(s_valB == 200 && s_setB == sets && strstr(read_file(s_cfgFile), "hd_2d_bloom = 200"),
+              "Right steps up and clamps at max 200 (no set at the bound)");
+    }
+    PcPort_DevMenuKey(PC_DEV_ACCEPT, 1);
+    CHECK(s_valB == 0 && !strcmp(row(2), "HD-2D BLOOM: 0%") && strstr(read_file(s_cfgFile), "hd_2d_bloom = 0"),
+          "Confirm at max wraps to min: %s", row(2));
+    PcPort_DevMenuKey(PC_DEV_ACCEPT, 1);
+    CHECK(s_valB == 10, "Confirm below max steps up (10)");
+    PcPort_DevMenuKey(PC_DEV_UP, 1);
+    PcPort_DevMenuKey(PC_DEV_LEFT, 1);
+    CHECK(s_valA == -2 && !strcmp(row(1), "HD-2D AREA: -2"), "negative range, NULL unit: %s", row(1));
+    PcPort_DevMenuKey(PC_DEV_LEFT, 1);
+    {
+        int sets = s_setA;
+        CHECK(s_valA == -3, "Left clamps at min -3 (step 2)");
+        PcPort_DevMenuKey(PC_DEV_LEFT, 1);
+        CHECK(s_valA == -3 && s_setA == sets, "Left at min: unchanged, no set");
+    }
+    {
+        int seq[4], i;
+        for (i = 0; i < 4; i++) { PcPort_DevMenuKey(PC_DEV_ACCEPT, 1); seq[i] = s_valA; }
+        CHECK(seq[0] == -1 && seq[1] == 1 && seq[2] == 3 && seq[3] == -3,
+              "Confirm cycles -3 -> %d -> %d -> %d -> %d (wrap max to min)", seq[0], seq[1], seq[2], seq[3]);
+    }
+    PcPort_DevMenuKey(PC_DEV_RIGHT, 1); PcPort_DevMenuKey(PC_DEV_RIGHT, 1); PcPort_DevMenuKey(PC_DEV_RIGHT, 1);
+    PcPort_DevMenuKey(PC_DEV_RIGHT, 1);
+    CHECK(s_valA == 3, "Right steps -3 -> -1 -> 1 -> 3 and clamps at max");
+    PcPort_DevMenuKey(PC_DEV_LEFT, 1);
+    CHECK(s_valA == 1 && strstr(read_file(s_cfgFile), "hd_2d_area = 1"), "saved as enhancements.hd_2d_area = 1");
+    {
+        int calls = s_enhCalls, a = s_valA, b = s_valB;
+        PcPort_DevMenuKey(PC_DEV_DOWN, 1); PcPort_DevMenuKey(PC_DEV_DOWN, 1);
+        CHECK(PcPort_DevMenuCursor() == 3, "cursor on FX 0 (a toggle row)");
+        PcPort_DevMenuKey(PC_DEV_LEFT, 1); PcPort_DevMenuKey(PC_DEV_RIGHT, 1);
+        CHECK(s_enhCalls == calls && s_valA == a && s_valB == b && !strcmp(row(3), "FX 0"),
+              "Left/Right on a toggle row do nothing");
+        PcPort_DevMenuKey(PC_DEV_UP, 1);
+    }
+    {   /* the pad: D-pad left/right step the value too */
+        tap(&pad, SDL_CONTROLLER_BUTTON_DPAD_LEFT);
+        CHECK(s_valB == 0 && PcPort_DevMenuOpen(), "pad D-pad left steps down (%d)", s_valB);
+        tap(&pad, SDL_CONTROLLER_BUTTON_DPAD_RIGHT); tap(&pad, SDL_CONTROLLER_BUTTON_DPAD_RIGHT);
+        CHECK(s_valB == 20 && held() == 0, "pad D-pad right steps up (%d), nothing reaches the game", s_valB);
+    }
+    PcPort_DevMenuRegisterEnhancementValue("NEW FX", val_a_get, val_a_set, 0, 1, 1, NULL);
+    CHECK(PcPort_DevMenuEnhancementCount() == PC_DEV_MAX_ENHANCEMENTS && PcPort_DevMenuRows() == 17,
+          "the 16-entry table is shared: a new numeric label is refused when full");
+    PcPort_DevMenuRegisterEnhancementValue("FX 1", val_a_get, val_a_set, 5, 1, 1, "");
+    PcPort_DevMenuRegisterEnhancementValue("FX 1", NULL, val_a_set, 0, 1, 1, "");
+    PcPort_DevMenuRegisterEnhancementValue("FX 1", val_a_get, NULL, 0, 1, 1, "");
+    PcPort_DevMenuRegisterEnhancementValue("FX 1", val_a_get, val_a_set, 0, 1, 0, "");
+    CHECK(!strcmp(row(4), "FX 1: ON"), "min > max, NULL get/set, step 0 refused (row unchanged: %s)", row(4));
+    PcPort_DevMenuRegisterEnhancement("HD-2D AREA", enh_a_get, enh_a_toggle);
+    CHECK(PcPort_DevMenuEnhancementCount() == PC_DEV_MAX_ENHANCEMENTS && !strcmp(row(1), "HD-2D AREA: ON"),
+          "re-registering the numeric label as a toggle replaces it again: %s", row(1));
+    {   /* next start: the saved file is loaded, the row applies it */
+        int a0 = s_setA;
+        s_valA = 0;
+        xg_plat_config_parse(read_file(s_cfgFile));
+        PcPort_DevMenuRegisterEnhancementValue("HD-2D AREA", val_a_get, val_a_set, -3, 3, 2, NULL);
+        CHECK(s_setA == a0 + 1 && s_valA == 1 && !strcmp(row(1), "HD-2D AREA: 1"),
+              "persistence round trip: reloaded config.ini re-applies hd_2d_area = %d", s_valA);
+        PcPort_DevMenuRegisterEnhancementValue("HD-2D AREA", val_a_get, val_a_set, 2, 3, 1, "X");
+        CHECK(s_valA == 2 && !strcmp(row(1), "HD-2D AREA: 2X"),
+              "re-registering with a new range replaces it and re-clamps the stored value: %s", row(1));
+    }
+    PcPort_DevMenuKey(PC_DEV_OPEN, 1);
+    CHECK(!PcPort_DevMenuOpen(), "F8 closes");
+    frame(); frame();
+    {
+        char cmd[600];
+        int rc;
+        setenv("DEV_MENU_TEST_CTOR", "1", 1);
+        snprintf(cmd, sizeof cmd, "/proc/%d/exe", (int)getpid());
+        rc = system(cmd);
+        unsetenv("DEV_MENU_TEST_CTOR");
+        CHECK(rc == 0, "constructor registration child run (rc %d)", rc);
+    }
 
     SDL_Quit();
     printf("dev_menu_test: %s (%d failure%s)\n", s_fail ? "FAIL" : "PASS", s_fail, s_fail == 1 ? "" : "s");

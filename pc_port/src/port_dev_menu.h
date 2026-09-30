@@ -14,7 +14,8 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-enum PcPortDevKey { PC_DEV_OPEN, PC_DEV_UP, PC_DEV_DOWN, PC_DEV_ACCEPT, PC_DEV_BACK };
+/* LEFT/RIGHT step a numeric enhancement row (no-op on other rows). */
+enum PcPortDevKey { PC_DEV_OPEN, PC_DEV_UP, PC_DEV_DOWN, PC_DEV_ACCEPT, PC_DEV_BACK, PC_DEV_LEFT, PC_DEV_RIGHT };
 
 /* Physical controller bits for PcPort_DevMenuPad (SDL GameController
  * buttons of the active pad, independent of the PS1 mapping). */
@@ -24,7 +25,9 @@ enum {
     PC_DEV_PAD_A = 1u << 2,
     PC_DEV_PAD_B = 1u << 3,
     PC_DEV_PAD_BACK = 1u << 4,  /* Back / View / Select */
-    PC_DEV_PAD_START = 1u << 5
+    PC_DEV_PAD_START = 1u << 5,
+    PC_DEV_PAD_LEFT = 1u << 6,  /* D-pad left or left stick left */
+    PC_DEV_PAD_RIGHT = 1u << 7  /* D-pad right or left stick right */
 };
 /* PcPort_DevMenuPad result flags. */
 enum {
@@ -80,14 +83,29 @@ typedef struct PcPortDevMenuHost {
 void PcPort_DevMenuSetHost(const PcPortDevMenuHost *host);
 
 /* Enhancement registry (HD-2D lane, pc_port/src/hd2d): each entry is a row
- * "LABEL: ON/OFF" on OPTIONS > ENHANCEMENTS after the built-in HD-2D FEI row,
- * in registration order; selecting it calls toggle(). Up to
+ * "LABEL: ON/OFF" (or a numeric row, below) on OPTIONS > ENHANCEMENTS after
+ * the built-in HD-2D FEI row, in registration order; selecting it calls
+ * toggle(). Up to
  * PC_DEV_MAX_ENHANCEMENTS entries (later ones are refused with a log line);
  * registering a label again replaces that entry. The label is copied (at most
  * 40 characters). get may be NULL (shown without a value). Safe to call
  * before PcPort_DevMenuInit, e.g. from a constructor. */
 #define PC_DEV_MAX_ENHANCEMENTS 16
 void PcPort_DevMenuRegisterEnhancement(const char *label, int (*get)(void), void (*toggle)(void));
+/* Numeric enhancement row "LABEL: <value><unit>" (unit may be NULL), in the
+ * same 16-entry table and order as the toggles; re-registering a label
+ * (toggle or numeric) replaces that row. Left/Right step the value by `step`
+ * clamped to [min, max]; Confirm steps up and wraps from max to min. Each
+ * change calls set(new value) and saves it in config.ini under
+ * [enhancements] (xg_plat_config_persist); the key is the label lower-cased
+ * with every non-alphanumeric character replaced by '_' ("HD-2D Bloom %" ->
+ * enhancements.hd_2d_bloom__). A stored value is clamped to [min, max] and
+ * applied through set() when the row is registered, or, for a row
+ * registered before the config is loaded (a constructor), in
+ * PcPort_DevMenuInit. Refused (log line) when get or set is NULL, min > max
+ * or step <= 0. Safe to call from a constructor. */
+void PcPort_DevMenuRegisterEnhancementValue(const char *label, int (*get)(void), void (*set)(int),
+                                            int min, int max, int step, const char *unit);
 int PcPort_DevMenuEnhancementCount(void);
 
 /* Game-state actions (port_dev_menu_actions.c), reached through the cheat
