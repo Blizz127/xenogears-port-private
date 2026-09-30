@@ -1,0 +1,27 @@
+# Game data never enters this repository: retail discs, ROMs, BIOS, saves, extracted assets.
+*.bin
+*.BIN
+*.cue
+*.CUE
+*.iso
+*.ISO
+*.chd
+*.CHD
+*.img
+*.IMG
+*.nes
+*.NES
+*.rom
+*.ROM
+*.sav
+*.SAV
+*.mcd
+*.MCD
+*.mcr
+*.MCR
+*.ecm
+*.ECM
+*.pbp
+*.PBP
+extracted/
+**/extracted/
