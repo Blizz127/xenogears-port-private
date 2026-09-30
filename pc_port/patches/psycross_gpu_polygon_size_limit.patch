@@ -1,0 +1,113 @@
+--- a/src/gpu/PsyX_GPU.cpp	2026-09-30 16:28:35.173077198 +0000
++++ b/src/gpu/PsyX_GPU.cpp	2026-09-30 16:28:55.023850231 +0000
+@@ -714,6 +714,46 @@
+ 	g_vertexBuffer[g_vertexIndex + 3] = g_vertexBuffer[g_vertexIndex + 1];
+ }
+ 
++/* _xeno_gpu_polygon_size_limit: the PS1 GPU draws nothing for a triangle
++ * whose vertices span 1024+ pixels horizontally or 512+ vertically (quads are
++ * the triangles v0-v1-v2 and v1-v2-v3, tested separately).  PsyCross drew
++ * them, which put spikes across the Xenogears world map at some camera
++ * angles.  A rejected triangle is collapsed onto its first vertex so it
++ * rasterises nothing while the split's vertex count stays as built. */
++#include "../../../../src/gpu_polygon_size_rule.h"
++
++int g_xenoGpuSizeRejected = 0;
++
++static void XenoGpuCollapse(GrVertex* tri)
++{
++	tri[1] = tri[0];
++	tri[2] = tri[0];
++}
++
++static void XenoGpuSizeLimitTriangle(GrVertex* first, VERTTYPE* p0, VERTTYPE* p1, VERTTYPE* p2)
++{
++	if (xeno_gpu_triangle_too_large(p0[0], p0[1], p1[0], p1[1], p2[0], p2[1]))
++	{
++		XenoGpuCollapse(first);
++		g_xenoGpuSizeRejected++;
++	}
++}
++
++/* After TriangulateQuad: [0..2] = v0 v1 v2, [3..5] = v1 v2 v3. */
++static void XenoGpuSizeLimitQuad(GrVertex* first, VERTTYPE* p0, VERTTYPE* p1, VERTTYPE* p2, VERTTYPE* p3)
++{
++	if (xeno_gpu_triangle_too_large(p0[0], p0[1], p1[0], p1[1], p2[0], p2[1]))
++	{
++		XenoGpuCollapse(first);
++		g_xenoGpuSizeRejected++;
++	}
++	if (xeno_gpu_triangle_too_large(p1[0], p1[1], p2[0], p2[1], p3[0], p3[1]))
++	{
++		XenoGpuCollapse(first + 3);
++		g_xenoGpuSizeRejected++;
++	}
++}
++
+ //------------------------------------------------------------------------------------------------------------------------
+ 
+ /* _xeno_hd2d_hooks: HOOK 3 (area textures) for the optional HD-2D lane
+@@ -1412,6 +1452,7 @@
+ 
+ 		GrVertex* firstVertex = &g_vertexBuffer[g_vertexIndex];
+ 		MakeVertexTriangle(firstVertex, &poly->x0, &poly->x1, &poly->x2, gteIndex);
++		XenoGpuSizeLimitTriangle(firstVertex, &poly->x0, &poly->x1, &poly->x2); /* _xeno_gpu_polygon_size_limit */
+ 		MakeTexcoordTriangleZero(firstVertex, 0);
+ 		MakeColourTriangle(firstVertex, shadeTexOn, &poly->r0, &poly->r0, &poly->r0);
+ 
+@@ -1436,6 +1477,7 @@
+ 
+ 			GrVertex* firstVertex = &g_vertexBuffer[g_vertexIndex];
+ 			MakeVertexTriangle(firstVertex, &poly->x0, &poly->x1, &poly->x2, gteIndex);
++		XenoGpuSizeLimitTriangle(firstVertex, &poly->x0, &poly->x1, &poly->x2); /* _xeno_gpu_polygon_size_limit */
+ 			MakeTexcoordTriangle(firstVertex, &poly->u0, &poly->u1, &poly->u2, poly->tpage, poly->clut, dither);
+ 			MakeColourTriangle(firstVertex, shadeTexOn, &poly->r0, &poly->r0, &poly->r0);
+ 			if (!shadeTexOn)
+@@ -1463,6 +1505,7 @@
+ 		MakeColourQuad(firstVertex, shadeTexOn, &poly->r0, &poly->r0, &poly->r0, &poly->r0);
+ 
+ 		TriangulateQuad();
++		XenoGpuSizeLimitQuad(firstVertex, &poly->x0, &poly->x1, &poly->x2, &poly->x3); /* _xeno_gpu_polygon_size_limit */
+ 
+ 		g_vertexIndex += 6;
+ #if defined(DEBUG_POLY_COUNT)
+@@ -1489,6 +1532,7 @@
+ 			Hd2dRetarget(firstVertex, 4);
+ 
+ 		TriangulateQuad();
++		XenoGpuSizeLimitQuad(firstVertex, &poly->x0, &poly->x1, &poly->x2, &poly->x3); /* _xeno_gpu_polygon_size_limit */
+ 
+ 		EndTexturedSplit(splitClutSemi, 6);
+ 
+@@ -1523,6 +1567,7 @@
+ 
+ 		GrVertex* firstVertex = &g_vertexBuffer[g_vertexIndex];
+ 		MakeVertexTriangle(firstVertex, &poly->x0, &poly->x1, &poly->x2, gteIndex);
++		XenoGpuSizeLimitTriangle(firstVertex, &poly->x0, &poly->x1, &poly->x2); /* _xeno_gpu_polygon_size_limit */
+ 		MakeTexcoordTriangleZero(firstVertex, 1);
+ 		MakeColourTriangle(firstVertex, shadeTexOn, &poly->r0, &poly->r1, &poly->r2);
+ 
+@@ -1544,6 +1589,7 @@
+ 
+ 		GrVertex* firstVertex = &g_vertexBuffer[g_vertexIndex];
+ 		MakeVertexTriangle(firstVertex, &poly->x0, &poly->x1, &poly->x2, gteIndex);
++		XenoGpuSizeLimitTriangle(firstVertex, &poly->x0, &poly->x1, &poly->x2); /* _xeno_gpu_polygon_size_limit */
+ 		MakeTexcoordTriangle(firstVertex, &poly->u0, &poly->u1, &poly->u2, poly->tpage, poly->clut, GET_TPAGE_DITHER(activeDrawEnv.tpage) || activeDrawEnv.dtd);
+ 		MakeColourTriangle(firstVertex, shadeTexOn, &poly->r0, &poly->r1, &poly->r2);
+ 		if (hd2d)
+@@ -1568,6 +1614,7 @@
+ 		MakeColourQuad(firstVertex, shadeTexOn, &poly->r0, &poly->r1, &poly->r3, &poly->r2);
+ 
+ 		TriangulateQuad();
++		XenoGpuSizeLimitQuad(firstVertex, &poly->x0, &poly->x1, &poly->x2, &poly->x3); /* _xeno_gpu_polygon_size_limit */
+ 
+ 		g_vertexIndex += 6;
+ 
+@@ -1593,6 +1640,7 @@
+ 			Hd2dRetarget(firstVertex, 4);
+ 
+ 		TriangulateQuad();
++		XenoGpuSizeLimitQuad(firstVertex, &poly->x0, &poly->x1, &poly->x2, &poly->x3); /* _xeno_gpu_polygon_size_limit */
+ 
+ 		EndTexturedSplit(splitClutSemi, 6);
+ 

@@ -168,8 +168,30 @@ static int ml_before_frame(int frame, void* user)
     PcPort_TestInputInject(&D_800AFE9C);
     PcPort_WorldCaptureSetFrame(frame);
 
-    if (dir == NULL || (frame % 60) != 0)
+    if (dir == NULL)
         return 0;
+    {
+        /* TEST TOOLING: XENO_WORLD_CAPTURE_FRAMES="n,n,..." replaces the
+         * every-60-frames capture cadence with an explicit frame list. */
+        const char* list = getenv("XENO_WORLD_CAPTURE_FRAMES");
+        if (list != NULL && list[0] != '\0') {
+            int wanted = 0;
+            const char* c = list;
+            while (*c != '\0') {
+                char* end;
+                long n = strtol(c, &end, 10);
+                if (end == c)
+                    break;
+                if ((int)n == frame)
+                    wanted = 1;
+                c = (*end == ',') ? end + 1 : end;
+            }
+            if (!wanted)
+                return 0;
+        } else if ((frame % 60) != 0) {
+            return 0;
+        }
+    }
     snprintf(path, sizeof(path), "%s/world-frame-%06d.bmp", dir, frame);
     if (PcPort_WorldCaptureRequest(frame, path) != 0)
         return -1;
@@ -192,6 +214,22 @@ static int ml_after_frame(int frame, void* user)
                 "[worldmap-open-loop] capture fulfillment failed frame=%d\n",
                 frame);
         return -1;
+    }
+    /* TEST TOOLING (XENO_WORLD_GPU_SIZE_LOG=1): triangles the GPU size limit
+     * rejected while this frame was drawn (psycross_gpu_polygon_size_limit). */
+    {
+        static int log_on = -1;
+        extern int g_xenoGpuSizeRejected __attribute__((weak));
+        if (log_on < 0) {
+            const char* e = getenv("XENO_WORLD_GPU_SIZE_LOG");
+            log_on = (e != NULL && e[0] == '1') ? 1 : 0;
+        }
+        if (log_on && &g_xenoGpuSizeRejected != NULL) {
+            if (g_xenoGpuSizeRejected != 0)
+                fprintf(stderr, "[worldmap-gpu] frame=%d size_rejected=%d\n",
+                        frame, g_xenoGpuSizeRejected);
+            g_xenoGpuSizeRejected = 0;
+        }
     }
     if ((frame % 60) == 0) {
         if (context->frame_limit > 0)

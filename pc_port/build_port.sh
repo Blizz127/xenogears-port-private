@@ -715,6 +715,10 @@ apply_psycross_patch "$ROOT/pc_port/patches/psycross_vsync_retail_n.patch" "_xen
 # definition linked, retail rendering is unchanged. Keep this after every
 # other PsyCross patch; generated against the tree they produce.
 apply_psycross_patch "$ROOT/pc_port/patches/psycross_hd2d_hooks.patch" "_xeno_hd2d_hooks"
+# The PS1 GPU does not draw a triangle spanning 1024+ pixels horizontally or
+# 512+ vertically (quads: each half); PsyCross drew them, so world-map terrain
+# near the eye showed as spikes across the screen at some camera angles.
+apply_psycross_patch "$ROOT/pc_port/patches/psycross_gpu_polygon_size_limit.patch" "_xeno_gpu_polygon_size_limit"
 # HD-2D lane PsyCross patches: every pc_port/patches/hd2d/*.patch, in
 # byte-sorted order, after all patches above. A patch is skipped when its
 # own sentinel -- the literal comment `/* _hd2d_<basename> */` (basename
