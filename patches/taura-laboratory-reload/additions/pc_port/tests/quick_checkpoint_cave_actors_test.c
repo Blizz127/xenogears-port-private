@@ -46,8 +46,10 @@ static void lab_setup(void)
 
 static void taura_laboratory(void)
 {
-    enum { NPC_START = 12 + PC_PORT_QUICK_BART_BYTES };
+    enum { NPC_START = 12 + PC_PORT_QUICK_BART_BYTES, FEI_CONTACT = NPC_START + 24 };
     lab_setup();
+    ActorData *fei = &scene.actor[1];
+    fei->scriptFlags.flags = 0x04024430;
     ActorData *elly = &scene.actor[2];
     elly->position = (VECTOR){-22806528,2031616,-11534336,0};
     elly->rotation.vy = 2048;
@@ -65,8 +67,10 @@ static void taura_laboratory(void)
     u8 wire[PC_PORT_QUICK_PARTY_BYTES], again[sizeof wire];
     assert(PcPort_TauraPartyCapture(wire));
     assert(!memcmp(wire, "F616", 4) && wire[NPC_START - 2] == 1 && wire[NPC_START - 1] == 1);
+    assert(wire[FEI_CONTACT] == 2);
 
     lab_setup();
+    fei->scriptFlags.flags = 0x00024430;
     memset(D_800B14F0, 0, sizeof D_800B14F0);
     for (int i = 0; i < TRAIL; ++i)
         set_wide(D_800B14F0 + i * STRIDE, 0x4000);
@@ -80,11 +84,23 @@ static void taura_laboratory(void)
         set_word(scene.sprite[slot] + 0x80, 7);
     }
     assert(PcPort_TauraPartyRestore(wire));
+    assert(fei->scriptFlags.flags == 0x04024430);
     assert_pose(2, &earned);
     assert_restored_trail(&earned);
     assert(elly->curAnimationId == 1 && (elly->scriptFlags.flags & 0x04000800) == 0x04000800);
     assert(elly->flags & 0x1000);
     assert(PcPort_TauraPartyCapture(again) && !memcmp(again, wire, sizeof wire));
+    fei->scriptFlags.flags &= ~0x04000000u;
+    assert(PcPort_TauraPartyCapture(again) && again[FEI_CONTACT] == 1);
+    fei->scriptFlags.flags = 0x04424430;
+    assert(PcPort_TauraPartyRestore(again) && fei->scriptFlags.flags == 0x00424430);
+    /* The original F616 record has no player contact value. Keep either live state. */
+    again[FEI_CONTACT] = 0;
+    assert(PcPort_TauraPartyRestore(again) && fei->scriptFlags.flags == 0x00424430);
+    fei->scriptFlags.flags |= 0x04000000u;
+    assert(PcPort_TauraPartyRestore(again) && fei->scriptFlags.flags == 0x04424430);
+    again[FEI_CONTACT] = 3;
+    assert_rejected(PcPort_TauraPartyRestore, again);
     test_script_words[0x1c0 / 2] = 0x14c0; /* Earlier scenario flags can coexist. */
     assert(PcPort_TauraPartyCapture(again) && PcPort_TauraPartyRestore(again));
     assert(test_script_words[0x1c0 / 2] == 0x14c0);
@@ -95,7 +111,7 @@ static void taura_laboratory(void)
     const size_t invalid[] = {0, 4, 6, 8 + 172 - 1, NPC_START - 4, NPC_START - 2,
                               NPC_START - 1, NPC_START + 1, NPC_START + 5,
                               NPC_START + 7, NPC_START + 9, NPC_START + 10,
-                              NPC_START + 24, sizeof wire - 1};
+                              FEI_CONTACT, FEI_CONTACT + 1, sizeof wire - 1};
     for (unsigned i = 0; i < sizeof invalid / sizeof invalid[0]; ++i) {
         memcpy(again, wire, sizeof again);
         again[invalid[i]] = 0x67;

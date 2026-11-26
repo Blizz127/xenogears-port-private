@@ -13,17 +13,19 @@ static int follower_pair_ready(int leader, int partner, int character)
     u8 animation, slope_contact; /* F616 only; F614 and W615 leave both zero. */
 enum EllyRoom { ELLY_FOREST, ELLY_WORKSHOP, ELLY_LAB };
 static const char elly_tags[][5] = { "F614", "W615", "F616" };
-enum { ELLY_SLOPE_CONTACT = 0x04000000 };
+enum { ACTOR_SLOPE_CONTACT = 0x04000000 };
 typedef struct {
     s16 rotation[3], sprite_direction, sprite_facing;
     u16 culled;
 } LabResidentFacing;
 
 enum { LAB_CITAN = 14, LAB_TAURA = 16, LAB_RESIDENTS = 2, LAB_CULLED = 0x200 };
+/* Earlier F616 records left this byte zero. Their ground contact is unknown. */
+enum { LAB_CONTACT_UNSAVED, LAB_CONTACT_CLEAR, LAB_CONTACT_SET };
+enum { LAB_FEI_CONTACT_OFFSET = sizeof(EllyParty) + LAB_RESIDENTS * sizeof(LabResidentFacing) };
 static const u8 lab_residents[LAB_RESIDENTS] = { LAB_CITAN, LAB_TAURA };
-_Static_assert(sizeof(LabResidentFacing) == 12 &&
-               sizeof(EllyParty) + LAB_RESIDENTS * sizeof(LabResidentFacing) <= PC_PORT_QUICK_PARTY_BYTES,
-               "F616 party and resident facings");
+_Static_assert(sizeof(LabResidentFacing) == 12 && LAB_FEI_CONTACT_OFFSET == 1764 &&
+               LAB_FEI_CONTACT_OFFSET < PC_PORT_QUICK_PARTY_BYTES, "F616 party layout");
 
 static int lab_raw_heading_valid(u16 angle)
 {
@@ -90,7 +92,7 @@ static int capture_elly_party(uint8_t *out, enum EllyRoom room, PcPortForestCame
     memcpy(saved.tag, elly_tags[room], sizeof saved.tag);
     if (room == ELLY_LAB) {
         saved.animation = (u8)elly->curAnimationId;
-        saved.slope_contact = !!(elly->scriptFlags.flags & ELLY_SLOPE_CONTACT);
+        saved.slope_contact = !!(elly->scriptFlags.flags & ACTOR_SLOPE_CONTACT);
     }
     LabResidentFacing facings[LAB_RESIDENTS];
     if (room == ELLY_LAB) {
@@ -98,22 +100,33 @@ static int capture_elly_party(uint8_t *out, enum EllyRoom room, PcPortForestCame
         if (!lab_facings_valid(facings))
             return 0;
     }
-    if (room == ELLY_LAB)
+    if (room == ELLY_LAB) {
         memcpy(out + sizeof saved, facings, sizeof facings);
+        const ActorData *fei = actor_data(WORKSHOP_FEI);
+        out[LAB_FEI_CONTACT_OFFSET] = (fei->scriptFlags.flags & ACTOR_SLOPE_CONTACT)
+                                    ? LAB_CONTACT_SET : LAB_CONTACT_CLEAR;
+    }
 static int restore_elly_party(const uint8_t *in, enum EllyRoom room, PcPortForestCameraTiming *timing)
     if (memcmp(saved.tag, elly_tags[room], sizeof saved.tag) ||
         (room == ELLY_LAB ? saved.animation > 3 || saved.slope_contact > 1 :
                             saved.animation || saved.slope_contact) ||
     size_t used = sizeof saved;
     LabResidentFacing facings[LAB_RESIDENTS];
+    u8 fei_contact = LAB_CONTACT_UNSAVED;
     if (room == ELLY_LAB) {
         memcpy(facings, in + used, sizeof facings);
-        if (!lab_facings_valid(facings))
+        fei_contact = in[LAB_FEI_CONTACT_OFFSET];
+        if (!lab_facings_valid(facings) || fei_contact > LAB_CONTACT_SET)
             return 0;
-        used += sizeof facings;
+        used = LAB_FEI_CONTACT_OFFSET + 1;
     }
     for (size_t i = used; i < PC_PORT_QUICK_PARTY_BYTES; ++i)
     if (room == ELLY_LAB) {
+        if (fei_contact != LAB_CONTACT_UNSAVED) {
+            ActorData *fei = actor_data(WORKSHOP_FEI);
+            fei->scriptFlags.flags = (fei->scriptFlags.flags & ~ACTOR_SLOPE_CONTACT) |
+                                     (fei_contact == LAB_CONTACT_SET ? ACTOR_SLOPE_CONTACT : 0);
+        }
         transfer_lab_facings(facings, 1);
         /* Rebinding can clear the moving flag. Restore the saved movement and
          * sprite-facing values after the live animation owns its resources. */
@@ -122,8 +135,8 @@ static int restore_elly_party(const uint8_t *in, enum EllyRoom room, PcPortFores
             func_800821F4((void *)(uintptr_t)g_FieldActors[WORKSHOP_ELLY].pSpriteData,
                           saved.animation, &g_FieldActors[WORKSHOP_ELLY]);
         }
-        elly->scriptFlags.flags = (elly->scriptFlags.flags & ~ELLY_SLOPE_CONTACT) |
-                                  (saved.slope_contact ? ELLY_SLOPE_CONTACT : 0);
+        elly->scriptFlags.flags = (elly->scriptFlags.flags & ~ACTOR_SLOPE_CONTACT) |
+                                  (saved.slope_contact ? ACTOR_SLOPE_CONTACT : 0);
     }
            capture_elly_party(out, ELLY_FOREST, timing);
     return in && timing && workshop_party_ready() && restore_elly_party(in, ELLY_FOREST, timing);
@@ -153,7 +166,7 @@ int PcPort_TauraPartyRegroup(void)
         ActorData *elly = actor_data(WORKSHOP_ELLY);
         elly->rotation.vx = elly->rotation.vy = (s16)0x8400;
         elly->rotation.vz = 0x400;
-        elly->scriptFlags.flags |= ELLY_SLOPE_CONTACT;
+        elly->scriptFlags.flags |= ACTOR_SLOPE_CONTACT;
         u8 *sprite = (u8 *)(uintptr_t)g_FieldActors[WORKSHOP_ELLY].pSpriteData;
         s16 direction = (u16)fei->rotation.vy & 0xfff;
         memcpy(sprite + 0x32, &direction, sizeof direction);
