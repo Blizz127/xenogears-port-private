@@ -49,3 +49,20 @@ Before pushing from this standalone private topic checkout, run the following co
 ```sh
 sh scripts/install-retail-guard.sh
 ```
+
+## Forest movement and workshop renderer update
+
+A sixth patch preserves Fei’s first walking step after loading a newly saved Disc 2 forest checkpoint. It also changes the native renderer’s triangle coverage in the workshop. Apply it after the five patches above from the starting checkout, before restoring either private document.
+
+```sh
+git apply --unidiff-zero --index --check "$patch_dir/forest-stride-workshop-renderer.patch"
+git apply --unidiff-zero --index "$patch_dir/forest-stride-workshop-renderer.patch"
+test "$(git write-tree)" = 65953771adb40ff5aeb310597d9c5e971829ef07
+```
+
+The patch has SHA-256 `1d7b7dd36787c6b28d71314100df5ad393881e2a29bb4ad17b32610973ca4680`. The private engineering build used commit `8531ff633e4153b89363822238445c62cec692e0`. A checkout containing that engineering commit can reproduce its two handover documents and verify the complete tree.
+
+```sh
+git restore --source=8531ff633e4153b89363822238445c62cec692e0 --staged --worktree -- HANDOVER.md docs/port/NATIVE_CONVERSION.md
+test "$(git write-tree)" = ae109520dce74e1805866637b8359eeec8783988
+```

@@ -1,0 +1,707 @@
+diff --git a/pc_port/build_port.sh b/pc_port/build_port.sh
+index 357ff30d5b4d109c64978217d538b9f1e3ed5a5e..cb319404d82035368b2aaf6f85ac6acf3f40e971 100755
+--- a/pc_port/build_port.sh
++++ b/pc_port/build_port.sh
+@@ -857,0 +858,2 @@ apply_psycross_patch "$ROOT/pc_port/patches/psycross_integer_texture_modulation.
++apply_psycross_patch "$ROOT/pc_port/patches/psycross_field_polygon_coverage.patch" "_xeno_field_polygon_coverage"
++apply_psycross_patch "$ROOT/pc_port/patches/psycross_conservative_field_triangles.patch" "_xeno_conservative_field_triangles"
+diff --git a/pc_port/patches/psycross_conservative_field_triangles.patch b/pc_port/patches/psycross_conservative_field_triangles.patch
+new file mode 100644
+index 0000000000000000000000000000000000000000..a815331235da1f26e07a3c5c93ea66bba0068351
+--- /dev/null
++++ b/pc_port/patches/psycross_conservative_field_triangles.patch
+@@ -0,0 +1,95 @@
++diff --git a/src/render/PsyX_render.cpp b/src/render/PsyX_render.cpp
++--- a/src/render/PsyX_render.cpp
+++++ b/src/render/PsyX_render.cpp
++@@ -9,6 +9,7 @@
++ #include "psx/libetc.h"
++ #include "PsyX/util/timer.h"
++ 
+++#include <algorithm>
++ #include <assert.h>
++ #include <stdlib.h>
++ #include <string.h>
++@@ -84,7 +85,7 @@
++ 
++ struct XenoFixedUvHeader {
++ 	int rowBase, firstY, pastY, colorMode;
++-	int left, top, right, bottom; // Exclusive right and bottom of covered samples.
+++	int left, top, right, bottom; // Bounding edges, or (sumX, sumY, 0, -growth) for original edges.
++ };
++ struct XenoFixedUvColors {
++ 	uint32_t xy[3], rgba[3], padding[2];
++@@ -1044,13 +1045,20 @@
++ 	GTE_PERSPECTIVE_CORRECTION\
++ 	"	if (v_fixedUvRange.x >= 0 && all(equal(fixedUvViewport.xy, fixedUvViewport.zw))) {\n"\
++ 	"	    // _xeno_field_polygon_coverage: GL half-pixel rasterization can lose whole\n"\
++-	"	    // PS1 slivers. One triangle encloses all covered pixel centers; the\n"\
+++	"	    // PS1 slivers. Both enclosures contain all covered pixel centers; the\n"\
++ 	"	    // fragment shader uses both ends of the original per-row span.\n"\
++-	"	    highp ivec2 corner = sampleBounds.xy;\n"\
++-	"	    highp int index = (gl_VertexID - (ps1FixedUv - 1)) % 3;\n"\
++-	"	    if (index == 1) corner.x += 2 * (sampleBounds.z - sampleBounds.x);\n"\
++-	"	    if (index == 2) corner.y += 2 * (sampleBounds.w - sampleBounds.y);\n"\
++-	"	    gl_Position.xy = vec2(corner) / vec2(fixedUvViewport.xy) * vec2(2.0, -2.0) + vec2(-1.0, 1.0);\n"\
+++	"	    highp vec2 corner;\n"\
+++	"	    if (sampleBounds.w < 0) {\n"\
+++	"	        highp float grow = float(-sampleBounds.w) / 256.0;\n"\
+++	"	        corner = a_position.xy + (3.0 * a_position.xy - vec2(sampleBounds.xy)) * grow + vec2(0.5);\n"\
+++	"	    } else {\n"\
+++	"	        highp ivec2 p = sampleBounds.xy;\n"\
+++	"	        highp int index = (gl_VertexID - (ps1FixedUv - 1)) % 3;\n"\
+++	"	        if (index == 1) p.x += 2 * (sampleBounds.z - sampleBounds.x);\n"\
+++	"	        if (index == 2) p.y += 2 * (sampleBounds.w - sampleBounds.y);\n"\
+++	"	        corner = vec2(p);\n"\
+++	"	    }\n"\
+++	"	    gl_Position.xy = corner / vec2(fixedUvViewport.xy) * vec2(2.0, -2.0) + vec2(-1.0, 1.0);\n"\
++ 	"	}\n"\
++ 	"		v_z = (gl_Position.z - 40.0) * 0.005;\n"\
++ 	"	}\n"
++@@ -3087,6 +3095,39 @@
++ 	return anyMarked;
++ }
++ 
+++// _xeno_conservative_field_triangles: keep the integer span as the coverage
+++// authority. A tight enclosing triangle saves fragment work on broad slanted
+++// surfaces; the bounds triangle still covers very thin or off-screen sources.
+++static void XenoPreferOriginalEdges(const XenoFixedUvVertex* p, XenoFixedUvHeader& h)
+++{
+++	if (h.left >= h.right) return;
+++	const int dx1 = p[1].x - p[0].x, dy1 = p[1].y - p[0].y;
+++	const int dx2 = p[2].x - p[0].x, dy2 = p[2].y - p[0].y;
+++	const int64_t area = llabs(int64_t(dx1) * dy2 - int64_t(dx2) * dy1);
+++	if (!area) return;
+++	const int longest = std::max(std::max(abs(dx1) + abs(dy1), abs(dx2) + abs(dy2)),
+++		abs(dx1 - dx2) + abs(dy1 - dy2));
+++
+++	// Moving vertex p by (3*p - sum)*n/256 moves each edge outward by
+++	// n*area/(256*edgeL1) in L-infinity distance. More than 1/4 pixel
+++	// covers edge ties even after rounding to the minimum GL subpixel grid.
+++	const int n = int(64 * longest / area) + 1;
+++	if (n > 256) return;
+++	const int scale = 256 + 3 * n;
+++	const int64_t box = int64_t(h.right - h.left) * (h.bottom - h.top);
+++	if (area * scale * scale >= box * 4 * 256 * 256) return;
+++	int extent = 0;
+++	for (int i = 0; i < 3; ++i)
+++		extent = std::max(extent, std::max(abs(int(p[i].x)), abs(int(p[i].y))));
+++	// Avoid precision loss at clip planes for distant input vertices.
+++	if ((extent + 1) * 256 + 2 * n * longest > 4096 * 256) return;
+++
+++	h.left = p[0].x + p[1].x + p[2].x;
+++	h.top = p[0].y + p[1].y + p[2].y;
+++	h.right = 0;
+++	h.bottom = -n;
+++}
+++
++ static int XenoPackFixedUvRows(const XenoFixedUvInput* inputs, int count, int width,
++ 	int height, XenoFixedUvRow* rows)
++ {
++@@ -3131,6 +3172,7 @@
++ 			header.bottom = y + 1;
++ 		}
++ 		if (header.right <= header.left) header.left = header.top = header.right = header.bottom = 0;
+++		XenoPreferOriginalEdges(input.vertices, header);
++ 		memcpy(rows + slot * 2, &header, sizeof(header));
++ 		if (varying)
++ 		{
+diff --git a/pc_port/patches/psycross_field_polygon_coverage.patch b/pc_port/patches/psycross_field_polygon_coverage.patch
+new file mode 100644
+index 0000000000000000000000000000000000000000..005e02e18ac78f52f0ae7223cdc58c81d90898fd
+--- /dev/null
++++ b/pc_port/patches/psycross_field_polygon_coverage.patch
+@@ -0,0 +1,223 @@
++diff --git a/src/render/PsyX_fixed_uv.cpp b/src/render/PsyX_fixed_uv.cpp
++--- a/src/render/PsyX_fixed_uv.cpp
+++++ b/src/render/PsyX_fixed_uv.cpp
++@@ -157,6 +157,7 @@
++ 		rows[y].stepU = stepU;
++ 		rows[y].stepV = stepV;
++ 		rows[y].firstX = firstX;
+++		rows[y].lastX = lastX;
++ 		rows[y].valid = 1;
++ 	}
++ 
++diff --git a/src/render/PsyX_fixed_uv.h b/src/render/PsyX_fixed_uv.h
++--- a/src/render/PsyX_fixed_uv.h
+++++ b/src/render/PsyX_fixed_uv.h
++@@ -4,7 +4,7 @@
++ 
++ /* _xeno_fixed_uv: CPU-side transcription of the PCSX-Redux software GPU's
++  * textured-triangle edge/span interpolation.  Rows are uploaded as two
++- * RGBA32I texels: seed/step, then first-X/valid plus padding. */
+++ * RGBA32I texels: seed/step, then the inclusive X bounds and validity. */
++ struct XenoFixedUvVertex
++ {
++ 	int16_t x;
++@@ -21,7 +21,7 @@
++ 	int32_t stepV;
++ 	int32_t firstX;
++ 	int32_t valid;
++-	int32_t reserved0;
+++	int32_t lastX;
++ 	int32_t reserved1;
++ };
++ 
++diff --git a/src/render/PsyX_render.cpp b/src/render/PsyX_render.cpp
++--- a/src/render/PsyX_render.cpp
+++++ b/src/render/PsyX_render.cpp
++@@ -70,7 +70,7 @@
++ enum {
++ 	XenoFixedUvBatchSize = 64,
++ 	XenoFixedUvRecordsPerLine = 128,
++-	XenoFixedUvAtlasLines = (XenoFixedUvBatchSize * (VRAM_HEIGHT + 1) +
+++	XenoFixedUvAtlasLines = (XenoFixedUvBatchSize * (VRAM_HEIGHT + 2) +
++ 		XenoFixedUvRecordsPerLine - 1) / XenoFixedUvRecordsPerLine,
++ 	XenoFixedUvCacheSlots = 32,
++ 	XenoFixedUvMaxResidentLines = 32
++@@ -78,8 +78,19 @@
++ struct XenoFixedUvInput {
++ 	XenoFixedUvVertex vertices[3];
++ 	uint16_t marked;
+++	uint32_t colors[3];
++ };
++-static_assert(sizeof(XenoFixedUvInput) == 20, "Comparable UV input has no padding");
+++static_assert(sizeof(XenoFixedUvInput) == 32, "Comparable UV input has no padding");
+++
+++struct XenoFixedUvHeader {
+++	int rowBase, firstY, pastY, colorMode;
+++	int left, top, right, bottom; // Exclusive right and bottom of covered samples.
+++};
+++struct XenoFixedUvColors {
+++	uint32_t xy[3], rgba[3], padding[2];
+++};
+++static_assert(sizeof(XenoFixedUvHeader) == sizeof(XenoFixedUvRow), "One atlas record");
+++static_assert(sizeof(XenoFixedUvColors) == sizeof(XenoFixedUvRow), "One atlas record");
++ 
++ struct XenoFixedUvCacheEntry {
++ 	XenoFixedUvInput inputs[XenoFixedUvBatchSize];
++@@ -875,6 +886,8 @@
++ 	"				address = fixedUvAddress(v_fixedUvRange.x + logicalY - v_fixedUvRange.y);\n"\
++ 	"				span = texelFetch(s_fixedUvRows, address + ivec2(1, 0), 0);\n"\
++ 	"			}\n"\
+++	"			if (all(equal(fixedUvViewport.xy, fixedUvViewport.zw)) &&\n"\
+++	"			    (span.y == 0 || logicalX < span.x || logicalX > span.z)) discard;\n"\
++ 	"			if (span.y != 0) {\n"\
++ 	"				highp ivec4 seedStep = texelFetch(s_fixedUvRows, address, 0);\n"\
++ 	"				highp uint positionU = uint(seedStep.x) + uint(logicalX - span.x) * uint(seedStep.z);\n"\
++@@ -899,10 +912,13 @@
++ 	"		vec4 color = (bilinearFilter > 0 && v_fixedUvRange.x < 0) ? bilinearTextureSample(v_texcoord.xy) : nearestTextureSample(v_texcoord.xy);\n"\
++ 	"		if (clutSemiMode == 1 && color.w < 0.5) { discard; }\n"\
++ 	"		if (clutSemiMode == 2 && color.w >= 0.5) { discard; }\n"\
++-	"		vec4 shaded = (ps1RawTextureIdentity > 0 && v_textureMode > 0.5) ? color : color * v_color;\n"\
+++	"		highp ivec2 pixel = ivec2(gl_FragCoord.xy);\n"\
+++	"		pixel.y = fixedUvViewport.y - 1 - pixel.y;\n"\
+++	"		vec4 gainColor = polygonColor(v_color, pixel, v_texcoord.z);\n"\
+++	"		vec4 shaded = (ps1RawTextureIdentity > 0 && v_textureMode > 0.5) ? color : color * gainColor;\n"\
++ 	"		if (v_textureMode < -0.5 && (bilinearFilter == 0 || v_fixedUvRange.x >= 0)) {\n"\
++ 	"			highp ivec3 texel = ivec3(floor(color.rgb * (255.0 / 8.0) + 0.5));\n"\
++-	"			highp ivec3 gain = ivec3(floor(v_color.rgb * (255.0 / 2.0) + 0.5));\n"\
+++	"			highp ivec3 gain = ivec3(floor(gainColor.rgb * (255.0 / 2.0) + 0.5));\n"\
++ 	"			shaded.rgb = vec3((texel * gain) / 16) / 255.0;\n"\
++ 	"		}\n"\
++ 	"		fragColor = dither(shaded);\n"\
++@@ -914,8 +930,29 @@
++ 	uniform highp isampler2D s_fixedUvRows;
++ 	uniform highp ivec4 fixedUvViewport;
++ 	flat varying highp ivec3 v_fixedUvRange;
+++	flat varying highp int v_polygonColorRecord;
++ 	highp ivec2 fixedUvAddress(highp int record) {
++ 		return ivec2((record % 128) * 2, record / 128);
+++	}
+++	highp ivec2 polygonPoint(highp int p) { return ivec2(p << 16, p) >> 16; }
+++	vec4 polygonRGBA(highp int c) { return vec4(ivec4(c, c >> 8, c >> 16, c >> 24) & ivec4(255)) / 255.0; }
+++	highp int cross2(highp ivec2 a, highp ivec2 b) { return a.x*b.y - a.y*b.x; }
+++	// Preserve the source Gouraud plane at integer PS1 samples. Interpolating
+++	// colors on the bounding triangle would shade along different edges.
+++	vec4 polygonColor(vec4 color, highp ivec2 pixel, float brightness) {
+++		if (v_polygonColorRecord < 0) return color;
+++		highp ivec2 address = fixedUvAddress(v_polygonColorRecord);
+++		highp ivec4 a = texelFetch(s_fixedUvRows, address, 0);
+++		highp ivec2 b = texelFetch(s_fixedUvRows, address + ivec2(1, 0), 0).xy;
+++		highp ivec2 origin = polygonPoint(a.x);
+++		highp ivec2 e1 = polygonPoint(a.y) - origin, e2 = polygonPoint(a.z) - origin;
+++		highp int area = cross2(e1, e2);
+++		if (area == 0) return color;
+++		highp int w1 = cross2(pixel - origin, e2), w2 = cross2(e1, pixel - origin);
+++		vec4 shaded = (float(area - w1 - w2) * polygonRGBA(a.w) +
+++		    float(w1) * polygonRGBA(b.x) + float(w2) * polygonRGBA(b.y)) / float(area);
+++		shaded.rgb *= brightness;
+++		return shaded;
++ 	}
++ 	uniform ivec4 rectViewport;
++ 	uniform int ps1RawTextureIdentity;
++@@ -978,10 +1015,19 @@
++ 	"	const vec2 c_UVFudge = vec2(0.00025, 0.00025);\n"\
++ 	"	void main() {\n"\
++ 	"	v_fixedUvRange = ivec3(-1, 0, 0);\n"\
+++	"	v_polygonColorRecord = -1;\n"\
+++	"	highp ivec4 sampleBounds = ivec4(0);\n"\
++ 	"	if (ps1FixedUv > 0 && a_extra.z == 38.0) {\n"\
++ 	"	    highp int slot = (gl_VertexID - (ps1FixedUv - 1)) / 3;\n"\
++-	"	    highp ivec4 header = texelFetch(s_fixedUvRows, fixedUvAddress(slot), 0);\n"\
++-	"	    if (header.w != 0) v_fixedUvRange = header.xyz;\n"\
+++	"	    highp ivec2 address = fixedUvAddress(slot * 2);\n"\
+++	"	    highp ivec4 header = texelFetch(s_fixedUvRows, address, 0);\n"\
+++	"	    if (header.w != 0) {\n"\
+++	"	        v_fixedUvRange = header.xyz;\n"\
+++	"	        if (all(equal(fixedUvViewport.xy, fixedUvViewport.zw))) {\n"\
+++	"	            sampleBounds = texelFetch(s_fixedUvRows, address + ivec2(1, 0), 0);\n"\
+++	"	            if (header.w == 2) v_polygonColorRecord = slot * 2 + 1;\n"\
+++	"	        }\n"\
+++	"	    }\n"\
++ 	"	}\n"\
++ 	"		v_rectUvOffset = vec3(0.0);\n"\
++ 	"		v_texcoord = a_texcoord;\n"\
++@@ -996,6 +1042,16 @@
++ 	"		v_page_clut.xy += c_UVFudge;\n"\
++ 	"		v_page_clut.zw += c_UVFudge;\n"\
++ 	GTE_PERSPECTIVE_CORRECTION\
+++	"	if (v_fixedUvRange.x >= 0 && all(equal(fixedUvViewport.xy, fixedUvViewport.zw))) {\n"\
+++	"	    // _xeno_field_polygon_coverage: GL half-pixel rasterization can lose whole\n"\
+++	"	    // PS1 slivers. One triangle encloses all covered pixel centers; the\n"\
+++	"	    // fragment shader uses both ends of the original per-row span.\n"\
+++	"	    highp ivec2 corner = sampleBounds.xy;\n"\
+++	"	    highp int index = (gl_VertexID - (ps1FixedUv - 1)) % 3;\n"\
+++	"	    if (index == 1) corner.x += 2 * (sampleBounds.z - sampleBounds.x);\n"\
+++	"	    if (index == 2) corner.y += 2 * (sampleBounds.w - sampleBounds.y);\n"\
+++	"	    gl_Position.xy = vec2(corner) / vec2(fixedUvViewport.xy) * vec2(2.0, -2.0) + vec2(-1.0, 1.0);\n"\
+++	"	}\n"\
++ 	"		v_z = (gl_Position.z - 40.0) * 0.005;\n"\
++ 	"	}\n"
++ 
++@@ -3021,7 +3077,11 @@
++ 			continue;
++ 		input.marked = 1;
++ 		for (int i = 0; i < 3; i++)
++-			input.vertices[i] = { vertices[i].x, vertices[i].y, vertices[i].u, vertices[i].v };
+++		{
+++			const GrVertex& v = vertices[i];
+++			input.vertices[i] = { v.x, v.y, v.u, v.v };
+++			input.colors[i] = v.r | (uint32_t(v.g) << 8) | (uint32_t(v.b) << 16) | (uint32_t(v.a) << 24);
+++		}
++ 		anyMarked = true;
++ 	}
++ 	return anyMarked;
++@@ -3030,12 +3090,12 @@
++ static int XenoPackFixedUvRows(const XenoFixedUvInput* inputs, int count, int width,
++ 	int height, XenoFixedUvRow* rows)
++ {
++-	int nextRecord = count;
+++	int nextRecord = count * 2;
++ 	bool anyFixed = false;
++ 	for (int slot = 0; slot < count; slot++)
++ 	{
++-		XenoFixedUvRow& header = rows[slot];
++-		header = {};
+++		rows[slot * 2] = {};
+++		rows[slot * 2 + 1] = {};
++ 		if (!inputs[slot].marked)
++ 			continue;
++ 		XenoFixedUvVertex vertices[3];
++@@ -3058,10 +3118,30 @@
++ 		// with no covered rows. That distinction controls fallback sampling.
++ 		if (!XenoBuildFixedUvRows(vertices, width, spanHeight ? spanHeight : 1, rows + nextRecord))
++ 			continue;
++-		header.seedU = nextRecord;
++-		header.seedV = firstY;
++-		header.stepU = pastY;
++-		header.stepV = 1;
+++		const XenoFixedUvInput& input = inputs[slot];
+++		const bool varying = input.colors[0] != input.colors[1] || input.colors[1] != input.colors[2];
+++		XenoFixedUvHeader header = { nextRecord, firstY, pastY, varying ? 2 : 1, width, pastY, 0, firstY };
+++		for (int y = firstY; y < pastY; ++y)
+++		{
+++			const XenoFixedUvRow& row = rows[nextRecord + y - firstY];
+++			if (!row.valid) continue;
+++			if (row.firstX < header.left) header.left = row.firstX;
+++			if (row.lastX + 1 > header.right) header.right = row.lastX + 1;
+++			if (y < header.top) header.top = y;
+++			header.bottom = y + 1;
+++		}
+++		if (header.right <= header.left) header.left = header.top = header.right = header.bottom = 0;
+++		memcpy(rows + slot * 2, &header, sizeof(header));
+++		if (varying)
+++		{
+++			XenoFixedUvColors source = {};
+++			for (int i = 0; i < 3; ++i)
+++			{
+++				source.xy[i] = uint16_t(input.vertices[i].x) | (uint32_t(uint16_t(input.vertices[i].y)) << 16);
+++				source.rgba[i] = input.colors[i];
+++			}
+++			memcpy(rows + slot * 2 + 1, &source, sizeof(source));
+++		}
++ 		nextRecord += spanHeight;
++ 		anyFixed = true;
++ 	}
+diff --git a/pc_port/src/quick_checkpoint.c b/pc_port/src/quick_checkpoint.c
+index 9bcda75b09a9d76fdb2f475c6b08aab2f9e2240c..40ff2495af8244fefd6d36af87f4237d6e3805a7 100644
+--- a/pc_port/src/quick_checkpoint.c
++++ b/pc_port/src/quick_checkpoint.c
+@@ -527,0 +528 @@ static int capture_field_follow_camera(uint8_t out[128], int forest_party);
++static SpriteData *forest_idle_sprite(const ActorData *actor, const FieldActor *field);
+@@ -582 +583,2 @@ static int capture_checkpoint(PcPortQuickCheckpoint* checkpoint)
+-    ActorData* actor = player_actor(NULL);
++    FieldActor *field;
++    ActorData* actor = player_actor(&field);
+@@ -646,0 +649,7 @@ static int capture_checkpoint(PcPortQuickCheckpoint* checkpoint)
++            if (forest && !checkpoint->field_particles_size) {
++                const SpriteData *sprite = forest_idle_sprite(actor, field);
++                if (sprite && sprite->moveSpeed >= 0 && sprite->moveSpeed <= PC_PORT_QUICK_MAX_IDLE_RADIUS) {
++                    checkpoint->has_forest_idle_radius = 1;
++                    checkpoint->forest_idle_radius = sprite->moveSpeed;
++                }
++            }
+@@ -1137,0 +1147,15 @@ static int checkpoint_contains(s16* vertices[3], s32 x, s32 z)
++/* After the workshop handback, Fei can stand at rest with either the entry
++ * radius or the zero radius left by a walk. His next step uses that value
++ * before the walking animation sets its regular speed. */
++static SpriteData *forest_idle_sprite(const ActorData *actor, const FieldActor *field)
++{
++    SpriteData *sprite = (SpriteData *)(uintptr_t)field->pSpriteData;
++    if (!sprite || actor->characterId != 0 || actor->defaultAnimationId || actor->curAnimationId ||
++        (field->status & (0x40u | ACTOR_STATUS_INVISIBLE)) != 0x40u ||
++        (actor->flags & (0x2000u | 0x80000u)) || sprite->step.x || sprite->step.y || sprite->step.z)
++        return NULL;
++    u32 divisor_word;
++    memcpy(&divisor_word, (const u8 *)sprite + 0xac, sizeof divisor_word);
++    return ((divisor_word >> 7) & 0xfff) == 256 ? sprite : NULL;
++}
++
+@@ -1255,3 +1279,7 @@ void PcPort_QuickCheckpointRestorePlayer(void)
+-    if (s_restoreForestParty &&
+-        (!s_loaded.has_party_followers || !PcPort_ForestPartyRestore(s_loaded.party_followers, &forest_timing)))
+-        PcPort_ForestRegroupAtPlayer();
++    if (s_restoreForestParty) {
++        if (!s_loaded.has_party_followers || !PcPort_ForestPartyRestore(s_loaded.party_followers, &forest_timing)) {
++            PcPort_ForestRegroupAtPlayer();
++        } else if (s_loaded.has_forest_idle_radius && forest_idle_sprite(actor, field_actor)) {
++            sprite->moveSpeed = s_loaded.forest_idle_radius;
++        }
++    }
+diff --git a/pc_port/src/quick_checkpoint_file.c b/pc_port/src/quick_checkpoint_file.c
+index f4521373e2c7d3b746a599c9ebdd9ef4f9461cd7..aa1c3bc51b25eecfca9da90ef91cdfd51ca32503 100644
+--- a/pc_port/src/quick_checkpoint_file.c
++++ b/pc_port/src/quick_checkpoint_file.c
+@@ -186,0 +187,19 @@ static uint32_t follower_checksum(const uint8_t* data, size_t size,
++/* A forest save can put FRD1 in the unused particle slot. Its PTY1 covers
++ * the preceding camera, actor and party witness records. Older readers see
++ * no PRT1 and can still validate that same chain. */
++static int forest_radius_context(const PcPortQuickCheckpoint* save)
++{
++    return save->on_disc2 && save->map == 614 && save->entrance == 2 &&
++           get_u16(save->game_state + 0x1930) == 249 &&
++           get_u16(save->game_state + 0x1932) == 2 &&
++           get_u16(save->game_state + 0x1934) == 615 &&
++           memcmp(save->game_state + 0x1d34, (const uint8_t[]){0, 1, 255}, 3) == 0 &&
++           save->field_actor_kind == PC_PORT_QUICK_ACTORS_FOLLOW_CAMERA &&
++           save->has_party_followers && memcmp(save->party_followers, "F614", 4) == 0;
++}
++
++static uint32_t forest_radius_checksum(const uint8_t* radius, const uint8_t* follower)
++{
++    return include_companion(checksum_bytes(2166136261u, radius, 16), "PTY1", follower, PARTY_BYTES);
++}
++
+@@ -666 +685,3 @@ static int stage_checkpoint(const CheckpointSlot* slot, const CheckpointJournal*
+-        size_t bytes = i == PARTICLE_FILE ? save->field_particles_size + PARTICLE_OVERHEAD
++        if (!next[i])
++            continue;
++        size_t bytes = i == PARTICLE_FILE ? get_u32(next[i] + 8) + PARTICLE_OVERHEAD
+@@ -670 +691 @@ static int stage_checkpoint(const CheckpointSlot* slot, const CheckpointJournal*
+-        if (next[i] && write_record(staged->next[i], next[i], bytes))
++        if (write_record(staged->next[i], next[i], bytes))
+@@ -742,0 +764,3 @@ int PcPort_QuickCheckpointWriteFile(const char* path,
++        (!checkpoint->field_particles_size && checkpoint->has_forest_idle_radius &&
++         (checkpoint->has_forest_idle_radius != 1 || !forest_radius_context(checkpoint) ||
++          checkpoint->forest_idle_radius < 0 || checkpoint->forest_idle_radius > PC_PORT_QUICK_MAX_IDLE_RADIUS)) ||
+@@ -853,0 +878,8 @@ int PcPort_QuickCheckpointWriteFile(const char* path,
++    if (checkpoint->has_forest_idle_radius && !checkpoint->field_particles_size) {
++        memcpy(particles, "FRD1", 4);
++        put_u32(particles + 4, checksum);
++        put_u32(particles + 8, 4);
++        put_u32(particles + 12, (uint32_t)checkpoint->forest_idle_radius);
++        put_u32(particles + 16, forest_radius_checksum(particles, follower));
++        next[PARTICLE_FILE] = particles;
++    }
+@@ -1061,0 +1094,7 @@ static int read_checkpoint(const char* path, const char* const files[COMPANION_C
++    if (particle_read == 1 && particle_size == 4 && memcmp(particles, "FRD1", 4) == 0 &&
++        forest_radius_context(&loaded) && get_u32(particles + 4) == expected &&
++        get_u32(particles + 12) <= PC_PORT_QUICK_MAX_IDLE_RADIUS &&
++        get_u32(particles + 16) == forest_radius_checksum(particles, follower)) {
++        loaded.has_forest_idle_radius = 1;
++        loaded.forest_idle_radius = (int32_t)get_u32(particles + 12);
++    }
+diff --git a/pc_port/src/quick_checkpoint_file.h b/pc_port/src/quick_checkpoint_file.h
+index f2e0f5a5611e4b43fd5239447495a4049fe1c1c5..29cec30cec2553df4fe49f1cd8389389faebe591 100644
+--- a/pc_port/src/quick_checkpoint_file.h
++++ b/pc_port/src/quick_checkpoint_file.h
+@@ -19,0 +20,3 @@ _Static_assert(sizeof(size_t) == sizeof(sizeof(0)), "include host checkpoint API
++/* At divisor 256 the step calculator multiplies radius >> 4 by a signed
++ * trig coefficient of magnitude <= 1024 before its final shift. */
++#define PC_PORT_QUICK_MAX_IDLE_RADIUS (INT32_MAX / 64)
+@@ -81,0 +85,3 @@ typedef struct PcPortQuickCheckpoint {
++    /* Optional FRD1 associated with the forest party and its camera. */
++    uint8_t has_forest_idle_radius;
++    int32_t forest_idle_radius;
+diff --git a/pc_port/tests/psycross_texture_modulation_test.cpp b/pc_port/tests/psycross_texture_modulation_test.cpp
+index d402f167086cd994a529a7130ecf202b92bb56ee..b84cccbf8e5dc077d9f5cca8c6f84ba02d784e32 100644
+--- a/pc_port/tests/psycross_texture_modulation_test.cpp
++++ b/pc_port/tests/psycross_texture_modulation_test.cpp
+@@ -271,0 +272,73 @@ static bool runFilterControl() {
++// Independent scan conversion at integer screen samples. The left edge belongs
++// to a triangle, the right edge belongs to its neighbor; bottom rows are open.
++static bool covered(const std::array<std::array<int,2>,3>& triangle, int x, int y) {
++    int intersections = 0, rightOfSample = 0;
++    for (int edge = 0; edge < 3; ++edge) {
++        auto a = triangle[edge], b = triangle[(edge+1)%3];
++        if (a[1] > b[1]) std::swap(a,b);
++        if (y < a[1] || y >= b[1]) continue;
++        const int height = b[1] - a[1];
++        const int edgeX = a[0]*height + (b[0]-a[0])*(y-a[1]);
++        ++intersections;
++        if (x*height < edgeX) ++rightOfSample;
++    }
++    return intersections == 2 && rightOfSample == 1;
++}
++
++static bool runFieldCoverage() {
++    using Triangle = std::array<std::array<int,2>,3>;
++    static const Triangle triangles[] = {
++        {{{4,8},{61,8},{8,61}}}, {{{61,8},{61,61},{8,61}}},
++        {{{32,-10},{33,4},{28,61}}}, {{{49,50},{28,61},{33,4}}},
++        {{{6,5},{60,54},{35,31}}}, {{{47,5},{49,6},{17,41}}},
++        {{{-17,-15},{79,59},{35,25}}}, {{{10,23},{35,16},{153,-17}}}
++    };
++    uploadTexture({0x7fff},1,1);
++    for (const auto& tri : triangles) {
++        for (int winding : {1,2}) {
++            clearScene(0,0,0);
++            POLY_FT3 p{};
++            p.code = 0x25; p.tpage = directPage;
++            p.x0 = tri[0][0]; p.y0 = tri[0][1];
++            p.x1 = tri[winding][0]; p.y1 = tri[winding][1];
++            p.x2 = tri[3-winding][0]; p.y2 = tri[3-winding][1];
++            if (!drawPacket((P_TAG*)&p)) return false;
++            Image image;
++            glReadPixels(0,0,size,size,GL_RGBA,GL_UNSIGNED_BYTE,image.data());
++            for (int y=0; y<size; ++y) for (int x=0; x<size; ++x) {
++                const int actual = rgb555(image[(size-1-y)*size+x]);
++                const int expected = covered(tri,x,y) ? 0x7fff : 0;
++                if (actual != expected) {
++                    fprintf(stderr,"Field triangle %td, winding %d at (%d,%d): %04x, wanted %04x\n",
++                            &tri-triangles,winding,x,y,actual,expected);
++                    return false;
++                }
++            }
++        }
++    }
++    // Sample a varying triangle at its vertices and interior. The interpolation
++    // plane still belongs to the original vertices when the coverage box changes.
++    clearScene(0,0,0);
++    POLY_GT3 shaded{};
++    shaded.code = 0x34; shaded.tpage = directPage;
++    shaded.x0 = 7; shaded.y0 = 3; shaded.r0 = 96; shaded.g0 = 32; shaded.b0 = 64;
++    shaded.x1 = 39; shaded.y1 = 3; shaded.r1 = 32; shaded.g1 = 96; shaded.b1 = 64;
++    shaded.x2 = 7; shaded.y2 = 35; shaded.r2 = 96; shaded.g2 = 32; shaded.b2 = 128;
++    if (!drawPacket((P_TAG*)&shaded)) return false;
++    for (int dy=0; dy<32; ++dy) for (int dx=0; dx<32-dy; ++dx) {
++        const int gain[] = {96-2*dx,32+2*dx,64+2*dy};
++        const auto observed = pixel(7+dx,3+dy);
++        for (int c=0; c<3; ++c) {
++            // RGBA8 conversion rounds the normalized (248/255)*(2*gain/255).
++            const int target = (248*2*gain[c]+127)/255;
++            if (abs((int)observed[c]-target) > 1) {
++                fprintf(stderr,"Field Gouraud plane (%d,%d), channel %d: %u, wanted %d\n",
++                        dx+7,dy+3,c,observed[c],target);
++                return false;
++            }
++        }
++    }
++    puts("PASS textured field polygon scanline coverage for both windings");
++    return true;
++}
++
+@@ -273,0 +347 @@ int main(int argc, char** argv) {
++    const bool coverage = strcmp(argv[1],"field-coverage")==0;
+@@ -281 +355 @@ int main(int argc, char** argv) {
+-    if (!audit && !identity && strcmp(argv[1],"default") != 0) return 2;
++    if (!coverage && !audit && !identity && strcmp(argv[1],"default") != 0) return 2;
+@@ -307 +381,3 @@ int main(int argc, char** argv) {
+-    if (audit) {
++    if (coverage) {
++        ok = runFieldCoverage();
++    } else if (audit) {
+@@ -321 +397 @@ int main(int argc, char** argv) {
+-    if (!audit)
++    if (!audit && !coverage)
+diff --git a/pc_port/tests/quick_checkpoint_forest_cases.inc b/pc_port/tests/quick_checkpoint_forest_cases.inc
+index ed61adf8e2b3e0e4334bab5ad359edfbb4a7dd10..3b772c13884738da0cedef6ca80aa897520f74ff 100644
+--- a/pc_port/tests/quick_checkpoint_forest_cases.inc
++++ b/pc_port/tests/quick_checkpoint_forest_cases.inc
+@@ -7,0 +8,5 @@ static unsigned forest_regroups;
++static SpriteData *forest_fei_sprite(void)
++{
++    return (SpriteData *)((u8 *)g_actor_mapping + 2048);
++}
++
+@@ -12,0 +18,6 @@ static void forest_constructor(void)
++    SpriteData *sprite = forest_fei_sprite();
++    memset(sprite, 0, sizeof *sprite);
++    sprite->moveSpeed = 262144;
++    memcpy((u8 *)sprite + 0xac, &(u32){0x8004}, sizeof(u32));
++    forest_fields[1].pSpriteData = (u32)(uintptr_t)sprite;
++    forest_fields[1].status = 0x240;
+@@ -200,0 +212,23 @@ static void test_forest_handback(void)
++        SpriteData *sprite = forest_fei_sprite();
++        capture_forest_party_slot(&with_camera);
++        require(with_camera.has_forest_idle_radius && with_camera.forest_idle_radius == 262144,
++                "forest F11 omitted the stationary entry radius");
++        sprite->moveSpeed = -1;
++        capture_forest_party_slot(&with_camera);
++        require(!with_camera.has_forest_idle_radius, "forest F11 accepted a negative radius");
++        sprite->moveSpeed = PC_PORT_QUICK_MAX_IDLE_RADIUS + 1;
++        capture_forest_party_slot(&with_camera);
++        require(!with_camera.has_forest_idle_radius, "forest F11 accepted an unsafe walking radius");
++        sprite->moveSpeed = 0;
++        sprite->step.z = -233472;
++        capture_forest_party_slot(&with_camera);
++        require(!with_camera.has_forest_idle_radius, "forest F11 labeled a moving sprite idle");
++        sprite->step.z = 0;
++        memcpy((u8 *)sprite + 0xac, &(u32){0x4004}, sizeof(u32));
++        capture_forest_party_slot(&with_camera);
++        require(!with_camera.has_forest_idle_radius, "forest F11 accepted another motion divisor");
++        memcpy((u8 *)sprite + 0xac, &(u32){0x8004}, sizeof(u32));
++        g_actor->curAnimationId = 1;
++        capture_forest_party_slot(&with_camera);
++        require(!with_camera.has_forest_idle_radius, "forest F11 labeled a walking animation idle");
++        g_actor->curAnimationId = 0;
+@@ -201,0 +236,2 @@ static void test_forest_handback(void)
++        require(with_camera.has_forest_idle_radius && !with_camera.forest_idle_radius,
++                "forest F11 omitted the resting radius after an earned walk");
+@@ -203,3 +239,6 @@ static void test_forest_handback(void)
+-        for (int damaged = 0; damaged < 2; ++damaged) {
+-            if (damaged) with_camera.party_followers[0] ^= 1;
+-            load_fixture(&with_camera);
++        for (int sample = 0; sample < 4; ++sample) {
++            PcPortQuickCheckpoint slot = with_camera;
++            int legacy = sample == 1, damaged = sample == 2, other_motion = sample == 3;
++            if (legacy || damaged) slot.has_forest_idle_radius = 0;
++            if (damaged) slot.party_followers[0] ^= 1;
++            load_fixture(&slot);
+@@ -207,0 +247,2 @@ static void test_forest_handback(void)
++            if (other_motion) g_actor->flags |= 0x2000;
++            g_actor->scriptFlags.flags = 0x24430;
+@@ -233,0 +275,2 @@ static void test_forest_handback(void)
++            require(sprite->moveSpeed == (sample ? 262144 : 0) && g_actor->scriptFlags.flags == 0x24430,
++                    "forest F12 restored the wrong movement radius or changed Fei's script flags");
+diff --git a/pc_port/tests/quick_checkpoint_slot_worker.c b/pc_port/tests/quick_checkpoint_slot_worker.c
+index af6dc28b9e36b6d9bfbee8838f59424423beea2c..36f1ed9813feb4f64516b8a0e7df6450a047c947 100644
+--- a/pc_port/tests/quick_checkpoint_slot_worker.c
++++ b/pc_port/tests/quick_checkpoint_slot_worker.c
+@@ -213,0 +214,14 @@ int main(int argc, char** argv)
++            } else if (strcmp(argv[i], "forest") == 0) {
++                save.map = 614;
++                save.entrance = 2;
++                save.on_disc2 = 1;
++                memcpy(save.game_state + 0x1930, (uint8_t[]){249, 0, 2, 0, 103, 2}, 6);
++                memcpy(save.game_state + 0x1d34, (uint8_t[]){0, 1, 255}, 3);
++                memcpy(save.party_followers, "F614", 4);
++            } else if (strncmp(argv[i], "radius=", 7) == 0) {
++                char *end;
++                long value = strtol(argv[i] + 7, &end, 10);
++                if (end == argv[i] + 7 || *end || value < INT32_MIN || value > INT32_MAX)
++                    return 2;
++                save.has_forest_idle_radius = 1;
++                save.forest_idle_radius = (int32_t)value;
+@@ -247,0 +262,13 @@ int main(int argc, char** argv)
++    if (strcmp(argv[2], "radius-max") == 0 && argc == 4) {
++        printf("%d\n", PC_PORT_QUICK_MAX_IDLE_RADIUS);
++        return 0;
++    }
++    if (strcmp(argv[2], "read-radius") == 0 && argc == 4) {
++        if (PcPort_QuickCheckpointReadFile(slot, &save) != 0)
++            return 8;
++        if (save.has_forest_idle_radius)
++            printf("%d\n", (int)save.forest_idle_radius);
++        else
++            puts("ABSENT");
++        return 0;
++    }
+diff --git a/pc_port/tests/run_psycross_texture_modulation_test.sh b/pc_port/tests/run_psycross_texture_modulation_test.sh
+index c597adaea2ae65a00f7d0cc26c8e32fd4c32314d..5fd9f24dc5fcf3578fb15882258c22937b39dbaa 100755
+--- a/pc_port/tests/run_psycross_texture_modulation_test.sh
++++ b/pc_port/tests/run_psycross_texture_modulation_test.sh
+@@ -7 +7,2 @@ case "$#:${1:-}" in
+-    0:) modes=(default identity) ;;
++    0:) modes=(default identity field-coverage) ;;
++    1:--field-coverage) modes=(field-coverage) ;;
+@@ -12 +13 @@ case "$#:${1:-}" in
+-    *) echo "usage: $0 [--audit-gouraud | --compare-varying BASELINE_SDK [NEW_OUTPUT_DIR]]" >&2; exit 2 ;;
++    *) echo "usage: $0 [--field-coverage | --audit-gouraud | --compare-varying BASELINE_SDK [NEW_OUTPUT_DIR]]" >&2; exit 2 ;;
+@@ -41 +42 @@ run() {
+-    local binary=$1 mode=$2 identity=0
++    local binary=$1 mode=$2 identity=0 fixed=0
+@@ -42,0 +44 @@ run() {
++    if [[ $mode == field-coverage ]]; then fixed=1; fi
+@@ -45 +47 @@ run() {
+-        XENO_PS1_FIXED_UV_INTERPOLATION=0 XENO_PS1_RAW_TEXTURE_IDENTITY="$identity" \
++        XENO_PS1_FIXED_UV_INTERPOLATION="$fixed" XENO_PS1_RAW_TEXTURE_IDENTITY="$identity" \
+diff --git a/pc_port/tests/run_quick_checkpoint_slot_transaction_test.py b/pc_port/tests/run_quick_checkpoint_slot_transaction_test.py
+index 478ba763937b9b57e667b2457a0321ee37b1b671..856fb6c443b3d547c73cae6913bce89456acb5a9 100755
+--- a/pc_port/tests/run_quick_checkpoint_slot_transaction_test.py
++++ b/pc_port/tests/run_quick_checkpoint_slot_transaction_test.py
+@@ -525,0 +526,50 @@ def party_record(exe, directory):
++def forest_radius_record(exe, directory):
++    slot = directory / "save"
++    record = directory / "save.particles"
++    args = ("write", slot, 1, 7, "follow-camera")
++    forest = (*args, "party", "forest")
++
++    def earlier_records():
++        return [(directory / ("save" + ext)).read_bytes()
++                for ext in ("", ".rng", ".time", ".light", ".camera", ".actors", ".music", ".bart")]
++
++    expect(run(exe, *forest), "SAVED", "forest party without optional radius")
++    prior = earlier_records()
++    expect(run(exe, "read-radius", slot), "ABSENT", "older forest checkpoint")
++    maximum = int(run(exe, "radius-max", slot))
++    for value in (maximum, 262144, 0):
++        expect(run(exe, *forest, f"radius={value}"), "SAVED", "capture supported radius")
++        expect(run(exe, "read-radius", slot), str(value), "distinguish a present zero from absence")
++        expect(earlier_records(), prior, "all historical forest records remain byte-identical")
++    party = b"F614" + party_data(7)[4:]
++    bound = b"PTY1" + bytes([1]) + prior[-1]
++    body = b"FRD1" + prior[0][20:24] + struct.pack("<Ii", 4, 0)
++    saved = record.read_bytes()
++    expect(saved, body + fnv32(body + bound), "FRD1 binds the complete verified PTY1")
++    for bad_args in ((*forest, "radius=-1"), (*forest, f"radius={maximum + 1}"),
++                     (*args, "party", "radius=0"), (*args, "forest", "radius=0")):
++        expect(run(exe, *bad_args), "WRITE_FAILED", "reject ineligible or out-of-range requests")
++        expect((earlier_records(), record.read_bytes()), (prior, saved), "rejected write preserves slot")
++    record.unlink()
++    for invalid in (None, saved[:-1], saved + b"x", saved[:-1] + bytes([saved[-1] ^ 1])):
++        if invalid is not None:
++            record.write_bytes(invalid)
++        expect(run(exe, "read-radius", slot), "ABSENT", "missing or damaged optional radius")
++        expect(run(exe, "read-party", slot), party.hex(), "retain party when radius is absent or damaged")
++    for invalid_value in (-1, maximum + 1):
++        changed = body[:12] + struct.pack("<i", invalid_value)
++        record.write_bytes(changed + fnv32(changed + bound))
++        expect(run(exe, "read-radius", slot), "ABSENT", "reject unsupported radius even with valid checksum")
++    expect(run(exe, *args, "party-alt", "forest", "radius=0"), "SAVED", "different valid party")
++    expect(earlier_records()[:-2], prior[:-2], "primary and camera are identical across party change")
++    record.write_bytes(saved)
++    expect(run(exe, "read-radius", slot), "ABSENT", "radius cannot transfer between distinct valid parties")
++    expect(run(exe, "read-party", slot), (b"F614" + party_data(8)[4:]).hex(), "retain other valid party")
++    expect(run(exe, *forest, "particles"), "SAVED", "preexisting PRT1")
++    with_particles = (record.read_bytes(), earlier_records())
++    expect(run(exe, *forest, "particles", "radius=-1"), "SAVED", "real particles take precedence")
++    expect((record.read_bytes(), earlier_records()), with_particles, "PRT1 and all its dependents are unchanged")
++    expect(run(exe, "read-particles", slot), "00ff07", "PRT1 payload survives")
++    expect(run(exe, "read-radius", slot), "ABSENT", "PRT1 supplies no radius")
++
++
+@@ -764,0 +815 @@ def main():
++        forest_radius_record(exe, directory())
