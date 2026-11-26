@@ -1,0 +1,106 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Xenogears Port <port@xenogears.invalid>
+Date: Thu, 26 Nov 2026 03:19:31 +0000
+Subject: [PATCH] Apply the forest controller handback before restoring the
+ player pose
+
+
+diff --git a/pc_port/src/quick_checkpoint.c b/pc_port/src/quick_checkpoint.c
+index abe9bdfbe265eea401cf075fe31731a82eab0caa..82f719bb0f30886845be068066d6e88cb98a7a0a 100644
+--- a/pc_port/src/quick_checkpoint.c
++++ b/pc_port/src/quick_checkpoint.c
+@@ -300,2 +300,2 @@
+-        s_restoreForestParty = 0;
+-        if (s_waitExcavationLift) {
++        if (s_waitExcavationLift || s_restoreForestParty) {
++            s_restoreForestParty = 0;
+@@ -658 +658 @@
+-    if ((s_waitExcavationLift || s_fieldPresentation == GONDOLA_WAIT_RESTORE) &&
++    if ((s_waitExcavationLift || s_restoreForestParty || s_fieldPresentation == GONDOLA_WAIT_RESTORE) &&
+@@ -854 +854 @@
+-       FOREST_HANDBACK = 0x39a, FOREST_REGROUP = 0x3a0 };
++       FOREST_HANDBACK = 0x39a, FOREST_HOLD = 0x3ae };
+@@ -929 +929,2 @@
+-    } else if (s_fieldPresentation == FIELD_WAIT_SUBMIT && !s_waitExcavationLift) {
++    } else if (s_fieldPresentation == FIELD_WAIT_SUBMIT &&
++               !s_waitExcavationLift && !s_restoreForestParty) {
+@@ -1056 +1057 @@
+-static void regroup_forest_party(void)
++static int forest_handback_finished(void)
+@@ -1058,3 +1059,3 @@
+-    /* Field construction can run the handback before the saved pose is
+-     * applied. Rebuild the follower trail at Fei's restored coordinates. */
+-    checkpoint_instruction(FOREST_CONTROLLER, FOREST_REGROUP);
++    const ActorData *controller = (const ActorData *)(uintptr_t)g_FieldActors[FOREST_CONTROLLER].pActorData;
++    return controller->scripts[0].currentIP == FOREST_HOLD &&
++           controller->scripts[0].flags_0x12 == 7 && !D_800B21D0;
+@@ -1192,0 +1194,2 @@
++    if (s_restoreForestParty && !forest_handback_finished())
++        return;
+@@ -1227,2 +1230,5 @@
+-    if (s_restoreForestParty)
+-        regroup_forest_party();
++    /* The authored regroup walks until the party arrives and rounds X/Z
++     * to world units. Only place the saved Q16 pose once that VM instruction
++     * has finished, then seed the missing follower trail without moving Fei. */
++    if (s_restoreForestParty && !s_loaded.has_party_followers)
++        PcPort_ForestRegroupAtPlayer();
+diff --git a/pc_port/src/quick_checkpoint_cave_actors.c b/pc_port/src/quick_checkpoint_cave_actors.c
+index 4026a69e98107ced679f336c5d26e5e489c4089d..1b84d925e16145e974e3eeaea3954ab702c3363f 100644
+--- a/pc_port/src/quick_checkpoint_cave_actors.c
++++ b/pc_port/src/quick_checkpoint_cave_actors.c
+@@ -496,0 +497,12 @@
++int PcPort_ForestRegroupAtPlayer(void)
++{
++    if ((g_GameSceneMapNum & 0x3fff) != 614 || !g_FieldActors || D_800ADBFC != 17 ||
++        g_PlayerActorIndex != 1 || g_GamePartyMembers[0] != 0 ||
++        g_GamePartyMembers[1] != 1 || g_GamePartyMembers[2] != 255 ||
++        D_8005A444[0] != 1 || D_8005A444[1] != 2 || D_8005A444[2] != 255 ||
++        !g_FieldActors[1].pActorData || !g_FieldActors[2].pActorData ||
++        !g_FieldActors[2].pSpriteData || (g_FieldActors[2].status & ACTOR_STATUS_INVISIBLE))
++        return 0;
++    return group_follower(1, 2);
++}
++
+diff --git a/pc_port/src/quick_checkpoint_cave_actors.h b/pc_port/src/quick_checkpoint_cave_actors.h
+index d52bef6f10136d60fd497d11fe364bc9db1a8338..63f10173a13c78fe7d7810b84cc990ebd0b88522 100644
+--- a/pc_port/src/quick_checkpoint_cave_actors.h
++++ b/pc_port/src/quick_checkpoint_cave_actors.h
+@@ -15,0 +16 @@
++int PcPort_ForestRegroupAtPlayer(void);
+diff --git a/pc_port/tests/quick_checkpoint_forest_cases.inc b/pc_port/tests/quick_checkpoint_forest_cases.inc
+index cdc1870eeb445d7f58cb67c5f69cca1f4e080d17..0a8eb9a0c1b698e8d855b06b01875825d6295dd7 100644
+--- a/pc_port/tests/quick_checkpoint_forest_cases.inc
++++ b/pc_port/tests/quick_checkpoint_forest_cases.inc
+@@ -44 +44 @@
+-static void forest_regroup(void)
++int PcPort_ForestRegroupAtPlayer(void)
+@@ -47,3 +47,2 @@
+-    require(D_800AFD1C == FOREST_OWNER && g_FieldScriptVMCurActor == &actors[2] &&
+-            g_FieldScriptVMCurActor->scriptInstructionPointer == 0x3a0,
+-            "forest regroup ran outside the controller's handback instruction");
++    require(actors[2].scripts[0].currentIP == 0x3ae,
++            "forest checkpoint interrupted a pending party instruction");
+@@ -52,0 +52 @@
++    return 1;
+@@ -137,3 +136,0 @@
+-        unsigned opcode = ((const u8 *)g_FieldScriptVMCurScriptData)[0x3a0];
+-        void (*previous)(void) = g_FieldScriptVMHandlers[opcode];
+-        g_FieldScriptVMHandlers[opcode] = forest_regroup;
+@@ -146,0 +144,6 @@
++        ActorData *actors = g_actor_mapping;
++        actors[2].scripts[0].currentIP = 0x3a0;
++        PcPort_QuickCheckpointRestorePlayer();
++        require(forest_regroups == 0 && actors[0].position.vx == 0,
++                "saved Fei was moved during the authored regroup");
++        actors[2].scripts[0].currentIP = 0x3ae;
+@@ -151 +153,0 @@
+-        g_FieldScriptVMHandlers[opcode] = previous;
+diff --git a/pc_port/tests/quick_checkpoint_restore_test.c b/pc_port/tests/quick_checkpoint_restore_test.c
+index a80b0aa380a7732854290a4a40dba8726e111f83..7836c3b59319c4c6b1141093b7054335702eebda 100644
+--- a/pc_port/tests/quick_checkpoint_restore_test.c
++++ b/pc_port/tests/quick_checkpoint_restore_test.c
+@@ -41 +41,2 @@
+-static void regroup_forest_party(void) { abort(); }
++static int forest_handback_finished(void) { abort(); }
++static int PcPort_ForestRegroupAtPlayer(void) { abort(); }
