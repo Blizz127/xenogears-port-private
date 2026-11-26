@@ -66,3 +66,22 @@ The patch has SHA-256 `1d7b7dd36787c6b28d71314100df5ad393881e2a29bb4ad17b3261097
 git restore --source=8531ff633e4153b89363822238445c62cec692e0 --staged --worktree -- HANDOVER.md docs/port/NATIVE_CONVERSION.md
 test "$(git write-tree)" = ae109520dce74e1805866637b8359eeec8783988
 ```
+
+## Returning to Taura's workshop
+
+The seventh patch preserves Elly's facing and the party trail in a new save at the pre-meeting workshop entrance. It also corrects draw order inside an opaque textured quad. Apply it after the sixth patch, with the starting documentation still in place.
+
+```sh
+git apply --unidiff-zero --index --check "$patch_dir/taura-workshop-save-and-quad.patch"
+git apply --unidiff-zero --index "$patch_dir/taura-workshop-save-and-quad.patch"
+test "$(git write-tree)" = 6ccc8dfa2c42aa9e86b861bf09255e5f2cf0e4ce
+```
+
+The patch SHA-256 is `a2cdcc382e69d06a232ca5fef410c9db8727953101237b3ee4e2236a38de6c5b`. The Linux engineering source is `2d7acef268cf8679df5c477e28d18e766c18ab49`. An engineering checkout with that commit can restore its private handover documents and verify its tree.
+
+```sh
+git restore --source=2d7acef268cf8679df5c477e28d18e766c18ab49 --staged --worktree -- HANDOVER.md docs/port/NATIVE_CONVERSION.md
+test "$(git write-tree)" = 3d8dcc1eee4a67a1871753952e75f7ef0b70c48c
+```
+
+In a clean Windows engineering checkout at `7a79bc5499c11684154255b84c03664b1f2ac61f`, applying this seventh patch by itself produces tree `7616acbb0468ed24ec87623c98dd145c7bea5a0c`, the complete source at `703cb99a8c2c3cd14026bd2fcccadb1ac8917ac5`.

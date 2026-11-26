@@ -1,0 +1,652 @@
+diff --git a/pc_port/build_port.sh b/pc_port/build_port.sh
+index cb319404d82035368b2aaf6f85ac6acf3f40e971..d5085a39d292ec6d8f20b8cbca75f74712aea393 100755
+--- a/pc_port/build_port.sh
++++ b/pc_port/build_port.sh
+@@ -859,0 +860 @@ apply_psycross_patch "$ROOT/pc_port/patches/psycross_conservative_field_triangle
++apply_psycross_patch "$ROOT/pc_port/patches/psycross_raw_ft4_order.patch" "_xeno_raw_ft4_order"
+diff --git a/pc_port/patches/psycross_raw_ft4_order.patch b/pc_port/patches/psycross_raw_ft4_order.patch
+new file mode 100644
+index 0000000000000000000000000000000000000000..116d7a7c0bff08264acddb81320507aca641bca8
+--- /dev/null
++++ b/pc_port/patches/psycross_raw_ft4_order.patch
+@@ -0,0 +1,24 @@
++diff --git a/src/gpu/PsyX_GPU.cpp b/src/gpu/PsyX_GPU.cpp
++--- a/src/gpu/PsyX_GPU.cpp
+++++ b/src/gpu/PsyX_GPU.cpp
++@@ -1292,3 +1292,18 @@ static int TriangulatePolygonQuad(const Polygon* poly)
++-	TriangulateQuad();
++-	return 6;
+++	if (poly->code == 0x2d)
+++	{
+++		// _xeno_raw_ft4_order: the raw opaque quad draws 1,2,3 before
+++		// 0,1,2. Both halves can cover a sample when the quad folds.
+++		// MakeVertexQuad stored the incoming vertices in order 0,1,3,2.
+++		GrVertex* v = &g_vertexBuffer[g_vertexIndex];
+++		v[5] = v[3];
+++		v[4] = v[1];
+++		v[3] = v[0];
+++		v[0] = v[1];
+++		v[1] = v[5];
+++	}
+++	else
+++	{
+++		TriangulateQuad();
+++	}
+++	return 6;
++ }
+diff --git a/pc_port/src/quick_checkpoint.c b/pc_port/src/quick_checkpoint.c
+index 40ff2495af8244fefd6d36af87f4237d6e3805a7..06f3ee5f692ed202384ba1661fb6b7fcf19af4f6 100644
+--- a/pc_port/src/quick_checkpoint.c
++++ b/pc_port/src/quick_checkpoint.c
+@@ -95,0 +96,2 @@ static const ScriptsFile *s_forestScript;
++static const ScriptsFile *s_tauraWorkshopScript;
++static int s_restoreTauraParty;
+@@ -303 +305,3 @@ void PcPort_QuickCheckpointSetFieldActive(int active)
+-        if (s_waitExcavationLift || s_restoreForestParty) {
++        s_tauraWorkshopScript = NULL;
++        if (s_waitExcavationLift || s_restoreForestParty || s_restoreTauraParty) {
++            s_restoreTauraParty = 0;
+@@ -648 +652,3 @@ static int capture_checkpoint(PcPortQuickCheckpoint* checkpoint)
+-                                              PcPort_StreetFollowersCapture(checkpoint->party_followers);
++                (s_tauraWorkshopScript && s_tauraWorkshopScript == g_FieldCurScriptFile &&
++                 PcPort_TauraWorkshopPartyCapture(checkpoint->party_followers)) ||
++                PcPort_StreetFollowersCapture(checkpoint->party_followers);
+@@ -697 +703,2 @@ static int poll_checkpoint(int titleMenu)
+-    if ((s_waitExcavationLift || s_restoreForestParty || s_fieldPresentation == GONDOLA_WAIT_RESTORE) &&
++    if ((s_waitExcavationLift || s_restoreForestParty || s_restoreTauraParty ||
++         s_fieldPresentation == GONDOLA_WAIT_RESTORE) &&
+@@ -965 +972 @@ void PcPort_QuickCheckpointFieldFrameSubmitted(void)
+-               !s_waitExcavationLift && !s_restoreForestParty) {
++               !s_waitExcavationLift && !s_restoreForestParty && !s_restoreTauraParty) {
+@@ -1066,0 +1074,12 @@ static const ScriptsFile *excavation_lift_script(unsigned loaded_bytes)
++/* F11 on the workshop floor uses the standard party follower. A later
++ * story sequence uses different actors inside this same field. */
++static int saved_taura_workshop_party(void)
++{
++    return s_loaded.on_disc2 && s_loaded.map == 615 && s_loaded.entrance == 0 &&
++           checkpoint_state_word(0x1930) == 249 && checkpoint_state_word(0x1932) == 0 &&
++           checkpoint_state_word(0x1934) == 614 && checkpoint_state_word(0x1af0) == 0x400 &&
++           !memcmp(s_loaded.game_state + 0x1d34, (u8[]){0, 1, 0xff}, 3) &&
++           s_loaded.field_actor_kind == PC_PORT_QUICK_ACTORS_FOLLOW_CAMERA &&
++           s_loaded.has_party_followers && !memcmp(s_loaded.party_followers, "W615", 4);
++}
++
+@@ -1071,0 +1091,11 @@ void PcPort_QuickCheckpointFieldScriptsReady(unsigned script_bytes)
++    s_tauraWorkshopScript = NULL;
++    s_restoreTauraParty = 0;
++    if ((g_GameSceneMapNum & 0x3fff) == 615 && g_ArchiveHeader && ArchiveGetDiscNumber() == 2 &&
++        script_bytes == 4400 && D_800ADBFC == 24 && g_FieldCurScriptFile &&
++        g_FieldCurScriptFile->numScripts == 24 &&
++        g_FieldScriptVMCurScriptData == (u8 *)g_FieldCurScriptFile + 0x84 + 24 * SCRIPT_OFFSET_TABLE_SIZE &&
++        checkpoint_script_hash(g_FieldCurScriptFile, script_bytes) == 0xa1f51a64u) {
++        s_tauraWorkshopScript = g_FieldCurScriptFile;
++        s_restoreTauraParty = s_restoreReady && saved_taura_workshop_party();
++        return;
++    }
+@@ -1243,0 +1274,2 @@ void PcPort_QuickCheckpointRestorePlayer(void)
++    if (s_restoreTauraParty && (!checkpoint_is_safe() || g_FieldCameraMode != 0))
++        return;
+@@ -1293,0 +1326,4 @@ void PcPort_QuickCheckpointRestorePlayer(void)
++    } else if (s_restoreTauraParty) {
++        int restored = PcPort_TauraWorkshopPartyRestore(s_loaded.party_followers);
++        fprintf(stderr, "[xeno-port][quick] workshop party and trail %s\n",
++                restored ? "restored" : "skipped (field state mismatch)");
+@@ -1339,0 +1376 @@ void PcPort_QuickCheckpointRestorePlayer(void)
++    s_restoreTauraParty = 0;
+diff --git a/pc_port/src/quick_checkpoint_cave_actors.c b/pc_port/src/quick_checkpoint_cave_actors.c
+index 4e1b0ad46da047b469bd272bc1a8642d78fb36a4..95e0a0902bbf2f66cdd95b1e065bd63f7f5b3bad 100644
+--- a/pc_port/src/quick_checkpoint_cave_actors.c
++++ b/pc_port/src/quick_checkpoint_cave_actors.c
+@@ -6,0 +7 @@
++#include "field/text_box.h"
+@@ -372 +373 @@ int PcPort_FollowerRestore(const uint8_t in[PC_PORT_QUICK_CAVE_BYTES])
+-/* Disc 2 field 614 has one follower. The field constructor owns the other
++/* The Disc 2 forest and workshop have one follower. The constructor owns the other
+@@ -381 +382 @@ typedef struct {
+-} ForestParty;
++} EllyParty;
+@@ -383,2 +384,2 @@ typedef struct {
+-_Static_assert(offsetof(ForestParty, elly) == 8 &&
+-               offsetof(ForestParty, timing) == 8 + PC_PORT_QUICK_BART_BYTES &&
++_Static_assert(offsetof(EllyParty, elly) == 8 &&
++               offsetof(EllyParty, timing) == 8 + PC_PORT_QUICK_BART_BYTES &&
+@@ -386,2 +387,2 @@ _Static_assert(offsetof(ForestParty, elly) == 8 &&
+-               sizeof(ForestParty) == 12 + PC_PORT_QUICK_BART_BYTES &&
+-               sizeof(ForestParty) <= PC_PORT_QUICK_PARTY_BYTES, "forest party layout");
++               sizeof(EllyParty) == 12 + PC_PORT_QUICK_BART_BYTES &&
++               sizeof(EllyParty) <= PC_PORT_QUICK_PARTY_BYTES, "forest party layout");
+@@ -405 +406,3 @@ static int forest_camera_timing_valid(PcPortForestCameraTiming timing)
+-int PcPort_ForestPartyCapture(uint8_t out[PC_PORT_QUICK_PARTY_BYTES], PcPortForestCameraTiming timing)
++/* Actor 14 is the cinematic Elly. The visible party member is actor 2,
++ * running her ordinary update. Actor 17 starts the later workshop story. */
++static int taura_workshop_party_ready(void)
+@@ -407 +410,10 @@ int PcPort_ForestPartyCapture(uint8_t out[PC_PORT_QUICK_PARTY_BYTES], PcPortFore
+-    if (!out || !forest_camera_timing_valid(timing) || !workshop_party_ready())
++    if ((g_GameSceneMapNum & 0x3fff) != 615 || g_FieldScriptMemoryU16[0] != 249 ||
++        g_FieldScriptMemoryU16[1] != 0 || g_FieldScriptMemoryU16[2] != 614 ||
++        g_FieldScriptMemoryU16[0x1c0 / 2] != 0x400 || D_800ADBFC != 24 ||
++        g_FieldNumActors < 24 || !follower_pair_ready(WORKSHOP_FEI, WORKSHOP_ELLY, 1))
++        return 0;
++    const ActorData *fei = actor_data(WORKSHOP_FEI), *elly = actor_data(WORKSHOP_ELLY);
++    const ActorData *event = actor_data(17);
++    if (!event || !(event->scriptFlags.flags & 1) || !(g_FieldActors[14].status & ACTOR_STATUS_INVISIBLE) ||
++        fei->scriptInstructionPointer != 0x55 || fei->scripts[0].currentIP != 0x55 ||
++        elly->scriptInstructionPointer != 0xbe || elly->scripts[0].currentIP != 0xbe)
+@@ -409 +421,9 @@ int PcPort_ForestPartyCapture(uint8_t out[PC_PORT_QUICK_PARTY_BYTES], PcPortFore
+-    ForestParty saved;
++    for (unsigned i = 0; i < 4; ++i)
++        if (g_FieldTextBoxes[i].visibility != -1)
++            return 0;
++    return 1;
++}
++
++static int capture_elly_party(uint8_t *out, const char tag[4], PcPortForestCameraTiming timing)
++{
++    EllyParty saved;
+@@ -411 +431 @@ int PcPort_ForestPartyCapture(uint8_t out[PC_PORT_QUICK_PARTY_BYTES], PcPortFore
+-    memcpy(saved.tag, "F614", sizeof saved.tag);
++    memcpy(saved.tag, tag, sizeof saved.tag);
+@@ -424 +444 @@ int PcPort_ForestPartyCapture(uint8_t out[PC_PORT_QUICK_PARTY_BYTES], PcPortFore
+-int PcPort_ForestPartyRestore(const uint8_t in[PC_PORT_QUICK_PARTY_BYTES], PcPortForestCameraTiming *timing)
++static int restore_elly_party(const uint8_t *in, const char tag[4], PcPortForestCameraTiming *timing)
+@@ -426,3 +446 @@ int PcPort_ForestPartyRestore(const uint8_t in[PC_PORT_QUICK_PARTY_BYTES], PcPor
+-    if (!in || !timing || !workshop_party_ready())
+-        return 0;
+-    ForestParty saved;
++    EllyParty saved;
+@@ -430,2 +448,3 @@ int PcPort_ForestPartyRestore(const uint8_t in[PC_PORT_QUICK_PARTY_BYTES], PcPor
+-    if (memcmp(saved.tag, "F614", sizeof saved.tag) || saved.reserved ||
+-        !forest_camera_timing_valid(saved.timing) || (saved.moving & ~0x800u) || (saved.use_trail & ~0x1000u) ||
++    if (memcmp(saved.tag, tag, sizeof saved.tag) || saved.reserved ||
++        (timing ? !forest_camera_timing_valid(saved.timing) : saved.timing.step || saved.timing.phase) ||
++        (saved.moving & ~0x800u) || (saved.use_trail & ~0x1000u) ||
+@@ -436 +455 @@ int PcPort_ForestPartyRestore(const uint8_t in[PC_PORT_QUICK_PARTY_BYTES], PcPor
+-    enum { pose_end = __builtin_offsetof(ForestParty, elly.pose) + sizeof(CavePose) };
++    enum { pose_end = __builtin_offsetof(EllyParty, elly.pose) + sizeof(CavePose) };
+@@ -446 +465,2 @@ int PcPort_ForestPartyRestore(const uint8_t in[PC_PORT_QUICK_PARTY_BYTES], PcPor
+-    *timing = saved.timing;
++    if (timing)
++        *timing = saved.timing;
+@@ -449,0 +470,22 @@ int PcPort_ForestPartyRestore(const uint8_t in[PC_PORT_QUICK_PARTY_BYTES], PcPor
++int PcPort_ForestPartyCapture(uint8_t out[PC_PORT_QUICK_PARTY_BYTES], PcPortForestCameraTiming timing)
++{
++    return out && forest_camera_timing_valid(timing) && workshop_party_ready() &&
++           capture_elly_party(out, "F614", timing);
++}
++
++int PcPort_ForestPartyRestore(const uint8_t in[PC_PORT_QUICK_PARTY_BYTES], PcPortForestCameraTiming *timing)
++{
++    return in && timing && workshop_party_ready() && restore_elly_party(in, "F614", timing);
++}
++
++int PcPort_TauraWorkshopPartyCapture(uint8_t out[PC_PORT_QUICK_PARTY_BYTES])
++{
++    return out && taura_workshop_party_ready() &&
++           capture_elly_party(out, "W615", (PcPortForestCameraTiming){0});
++}
++
++int PcPort_TauraWorkshopPartyRestore(const uint8_t in[PC_PORT_QUICK_PARTY_BYTES])
++{
++    return in && taura_workshop_party_ready() && restore_elly_party(in, "W615", NULL);
++}
++
+diff --git a/pc_port/src/quick_checkpoint_cave_actors.h b/pc_port/src/quick_checkpoint_cave_actors.h
+index d6787f39e074dda9e1ddc8252b997e518097699c..f98dd5135846943f3774a6f7134b0688d6e6d969 100644
+--- a/pc_port/src/quick_checkpoint_cave_actors.h
++++ b/pc_port/src/quick_checkpoint_cave_actors.h
+@@ -29,0 +30,4 @@ int PcPort_ForestPartyRestore(const uint8_t in[PC_PORT_QUICK_PARTY_BYTES], PcPor
++/* Elly on the ordinary workshop floor before the laboratory meeting. */
++int PcPort_TauraWorkshopPartyCapture(uint8_t out[PC_PORT_QUICK_PARTY_BYTES]);
++int PcPort_TauraWorkshopPartyRestore(const uint8_t in[PC_PORT_QUICK_PARTY_BYTES]);
++
+diff --git a/pc_port/tests/psycross_texture_modulation_test.cpp b/pc_port/tests/psycross_texture_modulation_test.cpp
+index b84cccbf8e5dc077d9f5cca8c6f84ba02d784e32..00ea282d2bb74dc2c8d0a1cdd9721e1766732dc7 100644
+--- a/pc_port/tests/psycross_texture_modulation_test.cpp
++++ b/pc_port/tests/psycross_texture_modulation_test.cpp
+@@ -287,0 +288,32 @@ static bool covered(const std::array<std::array<int,2>,3>& triangle, int x, int
++// Each folded raw quad has a sample in both halves and one in each half
++// alone. A zero texel in the last half must expose the earlier half.
++static bool runRawQuadOverlap() {
++    for (int mirror = 0; mirror < 4; ++mirror) {
++        auto x = [mirror](int v) { return mirror & 1 ? size - 1 - v : v; };
++        auto y = [mirror](int v) { return mirror & 2 ? size - 1 - v : v; };
++        POLY_FT4 quad{};
++        quad.code = 0x2d;
++        quad.tpage = directPage;
++        quad.x0 = x(8);  quad.y0 = y(52);
++        quad.x1 = x(4);  quad.y1 = y(4);
++        quad.x2 = x(56); quad.y2 = y(4);
++        quad.x3 = x(46); quad.y3 = y(48);
++        quad.u3 = 24;
++        for (unsigned short front : {0x001f, 0x0000}) {
++            const unsigned short back = 0x03e0;
++            std::vector<unsigned short> texture(32, back);
++            texture[0] = front;
++            uploadTexture(texture, 32, 1);
++            clearScene(0,0,0);
++            if (!drawPacket(reinterpret_cast<P_TAG*>(&quad)) || g_vertexIndex != 6 ||
++                !verifyPixel("FT4 overlapping halves", x(24),y(24),front ? front : back) ||
++                !verifyPixel("FT4 first half alone", x(9),y(40),front) ||
++                !verifyPixel("FT4 second half alone", x(43),y(34),back) ||
++                !verifyPixel("FT4 outside", x(62),y(60),0))
++                return false;
++        }
++    }
++    puts("PASS raw opaque quad draw order across both axes and transparent texels");
++    return true;
++}
++
+@@ -382 +414 @@ int main(int argc, char** argv) {
+-        ok = runFieldCoverage();
++        ok = runFieldCoverage() && runRawQuadOverlap();
+diff --git a/pc_port/tests/quick_checkpoint_cave_actors_test.c b/pc_port/tests/quick_checkpoint_cave_actors_test.c
+index b6f684a977f2500b58267fbc6b7f65dabcafdcac..9a57802e1294ce395bc6129f2a1e0f64635fc2c4 100644
+--- a/pc_port/tests/quick_checkpoint_cave_actors_test.c
++++ b/pc_port/tests/quick_checkpoint_cave_actors_test.c
+@@ -4,0 +5 @@
++#include "field/text_box.h"
+@@ -11 +12 @@
+-enum { FEI = 5, BART = 6, ROCK = 7, SLOTS = 8, FOREST_ACTORS = 17, TRAIL = 32, STRIDE = 0x48 };
++enum { FEI = 5, BART = 6, ROCK = 7, SLOTS = 8, FOREST_ACTORS = 17, TAURA_ACTORS = 24, TRAIL = 32, STRIDE = 0x48 };
+@@ -13,3 +14,3 @@ static struct {
+-    FieldActor slot[FOREST_ACTORS];
+-    ActorData actor[FOREST_ACTORS];
+-    _Alignas(4) u8 sprite[FOREST_ACTORS][0x180];
++    FieldActor slot[TAURA_ACTORS];
++    ActorData actor[TAURA_ACTORS];
++    _Alignas(4) u8 sprite[TAURA_ACTORS][0x180];
+@@ -17,0 +19 @@ FieldActor *volatile g_FieldActors = scene.slot;
++FieldTextBox g_FieldTextBoxes[4];
+@@ -91,0 +94,2 @@ void func_800223B0(void *sprite, s16 facing)
++    else if (g_GameSceneMapNum == 71 || g_GameSceneMapNum == 614 || g_GameSceneMapNum == 615)
++        assert(sprite == scene.sprite[2]);
+@@ -93 +97 @@ void func_800223B0(void *sprite, s16 facing)
+-        assert(sprite == scene.sprite[(g_GameSceneMapNum == 71 || g_GameSceneMapNum == 614) ? BAL_FOLLOWER : ELLY]);
++        assert(sprite == scene.sprite[ELLY]);
+@@ -182,3 +186,3 @@ struct FieldImage {
+-    FieldActor slots[FOREST_ACTORS];
+-    ActorData actors[FOREST_ACTORS];
+-    u8 sprites[FOREST_ACTORS][0x180];
++    FieldActor slots[TAURA_ACTORS];
++    ActorData actors[TAURA_ACTORS];
++    u8 sprites[TAURA_ACTORS][0x180];
+@@ -989,0 +994,160 @@ static void workshop_party(void)
++/* The ordinary workshop checkpoint and cold load differed in actor 2's
++ * rotation.vy (0x8000 versus 0x8e00). Sprite-facing and the history rows
++ * below vary independently to exercise their separate representation. */
++static void taura_setup(void)
++{
++    forest_setup();
++    g_GameSceneMapNum = 615;
++    for (int i = 0; i < 4; ++i)
++        g_FieldTextBoxes[i].visibility = -1;
++    test_script_words[0] = 249;
++    test_script_words[1] = 0;
++    test_script_words[2] = 614;
++    test_script_words[0x1c0 / 2] = 0x400;
++    g_FieldNumActors = D_800ADBFC = TAURA_ACTORS;
++    g_PlayerActorIndex = D_8005A444[0] = 1;
++    D_8005A444[1] = 2;
++    D_800AFB44[0] = 83;
++    D_800AFB44[1] = 38;
++    D_800AFB44[2] = 2;
++    pose(1, 0, (VECTOR){-17989542, 0, 688218, 0}, 38, 8);
++    pose(2, 1, (VECTOR){-18677760, 0, 0, 0}, 38, 8);
++    scene.actor[1].scriptFlags.flags = 0x04024430;
++    scene.actor[2].scriptFlags.flags = 0x010204b0;
++    scene.actor[1].scriptInstructionPointer = scene.actor[1].scripts[0].currentIP = 0x55;
++    scene.actor[2].scriptInstructionPointer = scene.actor[2].scripts[0].currentIP = 0xbe;
++    pose(14, 255, (VECTOR){0}, 0, 0);
++    scene.slot[14].status |= ACTOR_STATUS_INVISIBLE;
++    pose(17, 255, (VECTOR){0}, 0, 0);
++    scene.actor[17].scriptFlags.flags |= 1;
++    for (int i = 0; i < TRAIL; ++i) {
++        u8 *row = D_800B14F0 + i * STRIDE;
++        set_wide(row, i % 2 ? 0x800 : 0);
++        set_word(row + 8, (u16)(-285 + i));
++        set_word(row + 0x16, 38 + i);
++        set_word(row + 0x18, 8);
++    }
++}
++
++static void taura_reject_scene(const u8 *wire)
++{
++    u8 untouched[PC_PORT_QUICK_PARTY_BYTES];
++    memcpy(untouched, wire, sizeof untouched);
++    assert(!PcPort_TauraWorkshopPartyCapture(untouched));
++    assert(!memcmp(untouched, wire, sizeof untouched));
++    assert_rejected(PcPort_TauraWorkshopPartyRestore, wire);
++}
++
++static void taura_workshop(void)
++{
++    u8 wire[PC_PORT_QUICK_PARTY_BYTES], bad[sizeof wire];
++    struct FieldImage original, cold;
++    taura_setup();
++    scene.actor[2].rotation.vy = INT16_MIN;
++    scene.actor[2].scriptFlags.flags |= 0x800;
++    set_word(scene.sprite[2] + 0x80, 512);
++    D_800B2360 = 28;
++    D_800B2364 = 9;
++    D_800B2368 = 17;
++    observe(&original);
++    memset(wire, 0xa5, sizeof wire);
++    assert(PcPort_TauraWorkshopPartyCapture(wire));
++    assert(!memcmp(wire, "W615", 4));
++    for (size_t i = 8 + PC_PORT_QUICK_BART_BYTES; i < sizeof wire; ++i)
++        assert(!wire[i]);
++    assert(!PcPort_ForestPartyCapture(bad, (PcPortForestCameraTiming){12, 2}));
++    assert(!PcPort_StreetFollowersCapture(bad));
++
++    taura_setup();
++    ActorData *elly = &scene.actor[2];
++    elly->position.vx = scene.actor[1].position.vx;
++    elly->rotation.vy = (s16)0x8e00;
++    elly->scripts[1].waitTimer = 41;
++    elly->scriptFlags.flags |= 0x400000;
++    elly->flags |= 0x1020;
++    set_word(scene.sprite[2] + 0x80, 3072);
++    memset(D_800B14F0, 0, sizeof D_800B14F0);
++    for (int i = 0; i < TRAIL; ++i)
++        set_wide(D_800B14F0 + i * STRIDE, 0x4000);
++    D_800B2360 = D_800B2364 = D_800B2368 = 0;
++    D_800C3910 = 0;
++    observe(&cold);
++    assert(PcPort_TauraWorkshopPartyRestore(wire));
++    assert_pose(2, &original);
++    assert((u16)elly->rotation.vy == 0x8000);
++    assert(scene.slot[2].pActorData == cold.slots[2].pActorData);
++    assert(scene.slot[2].pSpriteData == cold.slots[2].pSpriteData);
++    assert(elly->characterId == 1);
++    assert(!memcmp(scene.sprite[2] + 0x80, original.sprites[2] + 0x80, 2));
++    assert(elly->scriptFlags.flags == (cold.actors[2].scriptFlags.flags | 0x800u));
++    assert(elly->flags == (cold.actors[2].flags & ~0x1000u));
++    assert(!memcmp(elly->scripts, cold.actors[2].scripts, sizeof elly->scripts));
++    assert(elly->scriptInstructionPointer == cold.actors[2].scriptInstructionPointer);
++    assert_restored_trail(&original);
++    assert(D_800B2360 == 28 && D_800B2364 == 9 && D_800B2368 == 17 && D_800C3910 == -1);
++    for (int i = 0; i < TAURA_ACTORS; ++i) {
++        if (i == 2)
++            continue;
++        assert(!memcmp(&scene.actor[i], &cold.actors[i], sizeof scene.actor[i]));
++        assert(!memcmp(&scene.slot[i], &cold.slots[i], sizeof scene.slot[i]));
++        assert(!memcmp(scene.sprite[i], cold.sprites[i], sizeof scene.sprite[i]));
++    }
++
++    /* A different pose must bring back its own heading and flag pair. */
++    elly->rotation.vy = (s16)0x87ff;
++    elly->scriptFlags.flags &= ~0x800u;
++    elly->flags |= 0x1000u;
++    assert(PcPort_TauraWorkshopPartyCapture(bad));
++    elly->rotation.vy = INT16_MIN;
++    elly->scriptFlags.flags |= 0x800u;
++    elly->flags &= ~0x1000u;
++    assert(PcPort_TauraWorkshopPartyRestore(bad));
++    assert((u16)elly->rotation.vy == 0x87ff && !(elly->scriptFlags.flags & 0x800u));
++    assert(elly->flags & 0x1000u);
++
++    const size_t reserved_or_invalid[] = {0, 4, 6, 8 + 172 - 1, 8 + PC_PORT_QUICK_BART_BYTES,
++                                          9 + PC_PORT_QUICK_BART_BYTES, sizeof wire - 1};
++    for (size_t i = 0; i < sizeof reserved_or_invalid / sizeof reserved_or_invalid[0]; ++i) {
++        memcpy(bad, wire, sizeof bad);
++        bad[reserved_or_invalid[i]] = 0xff;
++        assert_rejected(PcPort_TauraWorkshopPartyRestore, bad);
++    }
++    memcpy(bad, wire, sizeof bad);
++    memcpy(bad, "F614", 4);
++    assert_rejected(PcPort_TauraWorkshopPartyRestore, bad);
++    assert_rejected(restore_workshop_party, wire);
++    assert_rejected(PcPort_StreetFollowersRestore, wire);
++
++    const struct { unsigned word; u16 other; } gates[] = {
++        {0, 250}, {1, 1}, {2, 616}, {0x1c0 / 2, 0}
++    };
++    for (size_t i = 0; i < sizeof gates / sizeof gates[0]; ++i) {
++        taura_setup();
++        test_script_words[gates[i].word] = gates[i].other;
++        taura_reject_scene(wire);
++    }
++    taura_setup();
++    scene.actor[1].scripts[0].currentIP++;
++    taura_reject_scene(wire);
++    taura_setup();
++    scene.actor[2].scriptInstructionPointer++;
++    taura_reject_scene(wire);
++    taura_setup();
++    scene.slot[14].status &= ~ACTOR_STATUS_INVISIBLE;
++    taura_reject_scene(wire);
++    taura_setup();
++    scene.actor[17].scriptFlags.flags &= ~1u;
++    taura_reject_scene(wire);
++    for (int i = 0; i < 4; ++i) {
++        taura_setup();
++        g_FieldTextBoxes[i].visibility = 0;
++        taura_reject_scene(wire);
++    }
++    taura_setup();
++    D_8005A444[1] = 14;
++    taura_reject_scene(wire);
++    taura_setup();
++    D_800ADBFC--;
++    taura_reject_scene(wire);
++}
++
+@@ -1008,0 +1173,2 @@ int main(void)
++    taura_workshop();
++    puts("PASS Taura workshop follower raw heading, camera padding, trail and scene exclusion");
+diff --git a/pc_port/tests/quick_checkpoint_gate_test.c b/pc_port/tests/quick_checkpoint_gate_test.c
+index 811f34da7f72915abd1d542c9e8fcbea09781805..048dbe3ad1d15a47bb5892b2b8797abceed451c1 100644
+--- a/pc_port/tests/quick_checkpoint_gate_test.c
++++ b/pc_port/tests/quick_checkpoint_gate_test.c
+@@ -154 +154 @@ void SetGeomScreen(int distance)
+-    require((g_GameSceneMapNum == 102 || g_GameSceneMapNum == 614) && distance == 512,
++    require((g_GameSceneMapNum == 102 || g_GameSceneMapNum == 614 || g_GameSceneMapNum == 615) && distance == 512,
+@@ -1605,0 +1606 @@ static void test_field_lighting(void)
++#include "quick_checkpoint_taura_cases.inc"
+@@ -1893,0 +1895 @@ int main(int argc, char** argv)
++    test_taura_workshop_party();
+diff --git a/pc_port/tests/quick_checkpoint_restore_test.c b/pc_port/tests/quick_checkpoint_restore_test.c
+index a20a0516f385a211d5352fc22b59c58813d87baf..871b67a1e271027a1c284eda6f7edf300d51d529 100644
+--- a/pc_port/tests/quick_checkpoint_restore_test.c
++++ b/pc_port/tests/quick_checkpoint_restore_test.c
+@@ -26,0 +27 @@ static int s_restoreForestParty;
++static int s_restoreTauraParty;
+@@ -144,0 +146,6 @@ int PcPort_ForestPartyRestore(const uint8_t in[PC_PORT_QUICK_PARTY_BYTES], PcPor
++int PcPort_TauraWorkshopPartyRestore(const uint8_t in[PC_PORT_QUICK_PARTY_BYTES])
++{
++    (void)in;
++    abort(); /* Contact-only slots carry no typed workshop party. */
++}
++
+diff --git a/pc_port/tests/quick_checkpoint_taura_cases.inc b/pc_port/tests/quick_checkpoint_taura_cases.inc
+new file mode 100644
+index 0000000000000000000000000000000000000000..3755cbe2f01cd450ea96ec94a4b3c5ea2a18b5ee
+--- /dev/null
++++ b/pc_port/tests/quick_checkpoint_taura_cases.inc
+@@ -0,0 +1,174 @@
++/* The production camera and slot codec run here. The actor codec has its own
++ * field fixture; a tagged heading makes its invocation and order observable. */
++enum { TAURA_TEST_ACTORS = 24, TAURA_TEST_SCRIPT_BYTES = 4400 };
++static FieldActor taura_test_fields[TAURA_TEST_ACTORS];
++static _Alignas(ScriptsFile) u8 taura_test_script[TAURA_TEST_SCRIPT_BYTES];
++static unsigned taura_captures, taura_restores;
++
++int PcPort_TauraWorkshopPartyCapture(uint8_t out[PC_PORT_QUICK_PARTY_BYTES])
++{
++    require(g_GameSceneMapNum == 615 && g_FieldActors == taura_test_fields,
++            "workshop capture dispatched in another field");
++    ++taura_captures;
++    memcpy(out, "W615", 4);
++    memcpy(out + 4, &(g_actor + 1)->rotation.vy, sizeof(s16));
++    return 1;
++}
++
++int PcPort_TauraWorkshopPartyRestore(const uint8_t in[PC_PORT_QUICK_PARTY_BYTES])
++{
++    require(g_GameSceneMapNum == 615 && g_FieldActors == taura_test_fields &&
++            g_actor->position.vx == -17989542 && g_actor->position.vz == 688218,
++            "workshop party dispatched before Fei's saved placement");
++    require(!memcmp(in, "W615", 4), "unrecognized party payload dispatched as W615");
++    ++taura_restores;
++    memcpy(&(g_actor + 1)->rotation.vy, in + 4, sizeof(s16));
++    return 1;
++}
++
++static void taura_test_field(void)
++{
++    g_FieldActors = taura_test_fields;
++    D_800ADBFC = TAURA_TEST_ACTORS;
++    g_GameSceneMapNum = 615;
++    g_PlayerActorIndex = 1;
++    D_800AFB54 = 1; /* Geometry is independently covered by the contact fixture. */
++    taura_test_fields[1].pActorData = (u32)(uintptr_t)g_actor;
++    taura_test_fields[2].pActorData = (u32)(uintptr_t)(g_actor + 1);
++    taura_test_fields[1].status = taura_test_fields[2].status = 0x240;
++    g_FieldCurScriptFile = (ScriptsFile *)taura_test_script;
++    g_FieldScriptVMCurScriptData = taura_test_script + 0x84 + TAURA_TEST_ACTORS * 64;
++    g_actor->scripts[0].currentIP = g_actor->scriptInstructionPointer = 0x55;
++    (g_actor + 1)->scripts[0].currentIP = (g_actor + 1)->scriptInstructionPointer = 0xbe;
++    g_actor->position = (VECTOR){-17989542, 0, 688218, 0};
++    script_word(0, 249);
++    script_word(2, 0);
++    script_word(4, 614);
++    script_word(0x1c0, 0x400);
++    memcpy(g_GameState + 0x1d34, (u8[]){0, 1, 255}, 3);
++    target_z = g_actor->position.vz;
++    target_heading = 1536;
++    g_Scene = (FieldScene){0};
++    g_Scene.sceneScrZ = 512;
++    g_Scene.sceneDIP = 25;
++    g_Scene.sceneScale = 4096;
++    g_Scene.unk7C = g_Scene.sceneAngle.vy = target_heading;
++    memcpy((u8 *)&g_Scene + 0x60, &(s32){1536 * 65536}, sizeof(s32));
++    g_FieldCameraMode = 0;
++    D_800B233E = g_PlayerActorIndex;
++    g_CamMovementFlags = g_CamAtMovementDuration = g_CamEyeMovementDuration = 0;
++    g_CamInterpolation.atStepDistance = g_CamInterpolation.eyeStepDistance = 8;
++    D_800ADBA8 = D_800B21CD = D_800B21D8 = 0;
++    g_CameraEye = (VECTOR){24595548, -30474240, -42818980, 0};
++    g_CameraAt = (VECTOR){-18450596, -2097152, 227164, 0};
++    g_CameraEye2 = target_eye = (VECTOR){25056602, -30474240, -42357926, 0};
++    g_CameraAt2 = target_at = (VECTOR){-17989542, -2097152, 688218, 0};
++}
++
++static void taura_test_save(PcPortQuickCheckpoint *slot)
++{
++    PcPort_QuickCheckpointRequestSave();
++    require(!PcPort_QuickCheckpointPoll() &&
++            PcPort_QuickCheckpointGetUiState() == PC_PORT_QUICK_UI_SAVE_OK &&
++            !PcPort_QuickCheckpointReadFile(g_path, slot), "write and decode workshop F11");
++}
++
++static void taura_test_restore(unsigned script_size, int expected_party)
++{
++    const s16 entry_facing = 0x0800;
++    unsigned previous = taura_restores;
++    load_fixture_slot();
++    taura_test_field();
++    PcPort_QuickCheckpointFieldScriptsReady(script_size);
++    (g_actor + 1)->rotation.vy = entry_facing;
++    g_actor->position.vx = g_actor->position.vz = 0;
++    g_CameraEye.vx = 0;
++    target_calls = matrix_calls = 0;
++    if (expected_party) {
++        D_800B21D0 = 1;
++        PcPort_QuickCheckpointRestorePlayer();
++        require(!g_actor->position.vx && taura_restores == previous, "workshop F12 bypassed event lock");
++        D_800B21D0 = 0;
++        g_FieldCameraMode = 2;
++        require(!PcPort_QuickCheckpointPoll() && !g_actor->position.vx && taura_restores == previous,
++                "workshop F12 bypassed camera ownership");
++        g_FieldCameraMode = 0;
++        require(!PcPort_QuickCheckpointPoll(), "workshop F12 retry started a new field");
++    } else {
++        PcPort_QuickCheckpointRestorePlayer();
++    }
++    PcPort_QuickCheckpointRestorePlayer();
++    require(g_actor->position.vx == -17989542 && g_actor->position.vz == 688218 &&
++            g_CameraEye.vx == 24595548 && matrix_calls == 1,
++            "workshop F12 lost Fei or the original follow camera");
++    require(taura_restores == previous + (unsigned)expected_party &&
++            (g_actor + 1)->rotation.vy == (expected_party ? (s16)0x8000 : entry_facing),
++            "workshop F12 substituted a party or guessed missing facing");
++}
++
++static void test_taura_workshop_party(void)
++{
++    const char *path = getenv("XENO_QUICK_TEST_TAURA_SCRIPT");
++    PcPortQuickCheckpoint legacy, saved;
++    reset_case();
++    mounted_disc = 2;
++    taura_test_field();
++    g_FieldCurScriptFile->numScripts = TAURA_TEST_ACTORS;
++    PcPort_QuickCheckpointFieldScriptsReady(0);
++    taura_test_save(&legacy);
++    require(legacy.field_actor_kind == PC_PORT_QUICK_ACTORS_FOLLOW_CAMERA && legacy.has_field_camera &&
++            !legacy.has_party_followers && !taura_captures, "unidentified workshop captured a party");
++    taura_test_restore(0, 0);
++
++    if (path) {
++        FILE *file = fopen(path, "rb");
++        require(file && fread(taura_test_script, 1, sizeof taura_test_script, file) == sizeof taura_test_script &&
++                fgetc(file) == EOF && !ferror(file) && fclose(file) == 0, "read supplied field 615 script");
++        taura_test_field();
++        PcPort_QuickCheckpointFieldScriptsReady(sizeof taura_test_script);
++        (g_actor + 1)->rotation.vy = (s16)0x8000;
++        taura_test_save(&saved);
++        require(saved.field_actor_kind == PC_PORT_QUICK_ACTORS_FOLLOW_CAMERA && saved.has_party_followers &&
++                !memcmp(saved.party_followers, "W615", 4) && taura_captures == 1,
++                "identified workshop F11 omitted W615 or its FCV1");
++        taura_test_restore(sizeof taura_test_script, 1);
++        taura_test_restore(0, 0);
++        taura_test_script[0] ^= 1;
++        taura_test_restore(sizeof taura_test_script, 0);
++        taura_test_script[0] ^= 1;
++
++        char party_path[1024];
++        require(snprintf(party_path, sizeof party_path, "%s.bart", g_path) < (int)sizeof party_path,
++                "workshop party fixture path");
++        FILE *damaged = fopen(party_path, "r+b");
++        require(damaged && !fseek(damaged, -1, SEEK_END), "open workshop party checksum");
++        int byte = fgetc(damaged);
++        require(byte != EOF && !fseek(damaged, -1, SEEK_END) && fputc(byte ^ 1, damaged) != EOF &&
++                !fclose(damaged), "damage only the workshop party checksum");
++        taura_test_restore(sizeof taura_test_script, 0);
++
++        require(!PcPort_QuickCheckpointWriteFile(g_path, &legacy), "write legacy workshop FCV1");
++        taura_test_restore(sizeof taura_test_script, 0);
++        PcPortQuickCheckpoint wrong_story = saved;
++        camera_game_word(&wrong_story, 0x1af0, 0x1400);
++        require(!PcPort_QuickCheckpointWriteFile(g_path, &wrong_story), "write later workshop story");
++        taura_test_restore(sizeof taura_test_script, 0);
++        memcpy(saved.party_followers, "OLD?", 4);
++        require(!PcPort_QuickCheckpointWriteFile(g_path, &saved), "write unknown workshop payload");
++        taura_test_restore(sizeof taura_test_script, 0);
++        taura_test_field();
++        PcPort_QuickCheckpointFieldScriptsReady(sizeof taura_test_script);
++        g_Scene.sceneScrZ = 0;
++        taura_test_save(&saved);
++        require(!saved.has_party_followers && !saved.field_actor_kind && taura_captures == 1,
++                "workshop party captured without a complete FCV1");
++        puts("QUICK GATE Disc 2 workshop W615 F11/F12, script identity and legacy FCV1: PASS");
++    } else {
++        puts("QUICK GATE original workshop W615 not run (set XENO_QUICK_TEST_TAURA_SCRIPT)");
++    }
++    g_FieldCurScriptFile = &test_script_file;
++    g_FieldScriptVMCurScriptData = test_music_script;
++    D_800AFB54 = 2;
++    mounted_disc = 1;
++    reset_case();
++}
+diff --git a/pc_port/tests/run_quick_checkpoint_gate_test.sh b/pc_port/tests/run_quick_checkpoint_gate_test.sh
+index b41a29610170d496c7149f4a9e1d201cf918ae8d..12c546f0406ee66150940015b87644c8feed3c2a 100755
+--- a/pc_port/tests/run_quick_checkpoint_gate_test.sh
++++ b/pc_port/tests/run_quick_checkpoint_gate_test.sh
+@@ -8 +8 @@ if [[ -n "${XENO_DISC2:-}" ]]; then
+-  # Extract the two original field scripts into test-local temporary storage.
++  # Extract the original field scripts into test-local temporary storage.
+@@ -18 +18 @@ try:
+-    for field in (614, 616):
++    for field in (614, 615, 616):
+@@ -25,0 +26 @@ PY
++  export XENO_QUICK_TEST_TAURA_SCRIPT="${XENO_QUICK_TEST_TAURA_SCRIPT:-$out/field615.script}"
