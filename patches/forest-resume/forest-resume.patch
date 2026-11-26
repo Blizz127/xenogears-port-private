@@ -1,0 +1,105 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Xenogears Port <port@xenogears.invalid>
+Date: Thu, 26 Nov 2026 03:10:39 +0000
+Subject: [PATCH] Resume the earned Disc 2 forest checkpoint
+
+
+diff --git a/pc_port/src/quick_checkpoint.c b/pc_port/src/quick_checkpoint.c
+index dc5b09f0cfeb385b284ac3d794c0c159923c6939..abe9bdfbe265eea401cf075fe31731a82eab0caa 100644
+--- a/pc_port/src/quick_checkpoint.c
++++ b/pc_port/src/quick_checkpoint.c
+@@ -92,0 +93 @@
++static int s_restoreForestParty;
+@@ -298,0 +300 @@
++        s_restoreForestParty = 0;
+@@ -849,0 +852,20 @@
++enum { FOREST_FIELD = 614, FOREST_ENTRANCE = 2, FOREST_CONTROLLER = 12,
++       FOREST_ACTORS = 17, FOREST_SCRIPT_BYTES = 3608,
++       FOREST_HANDBACK = 0x39a, FOREST_REGROUP = 0x3a0 };
++
++static int saved_forest_checkpoint(void)
++{
++    /* On the workshop entrance the first F11-eligible frame comes after the
++     * last dialogue. Earlier F11 files therefore identify the same handback
++     * even though the scene's controller and local variables were transient. */
++    return s_loaded.on_disc2 && s_loaded.map == FOREST_FIELD &&
++           s_loaded.entrance == FOREST_ENTRANCE &&
++           checkpoint_state_word(0x1930) == 249 &&
++           checkpoint_state_word(0x1932) == FOREST_ENTRANCE &&
++           checkpoint_state_word(0x1934) == 615 &&
++           !memcmp(s_loaded.game_state + 0x1d34, (u8[]){0, 1, 0xff}, 3) &&
++           !s_loaded.field_actor_file_rejected &&
++           (s_loaded.field_actor_kind == PC_PORT_QUICK_ACTORS_NONE ||
++            s_loaded.field_actor_kind == PC_PORT_QUICK_ACTORS_FOLLOW_CAMERA);
++}
++
+@@ -881 +903,2 @@
+-        s_loaded.field_actor_kind == PC_PORT_QUICK_ACTORS_FOLLOW_CAMERA || tank_room_checkpoint()))
++        s_loaded.field_actor_kind == PC_PORT_QUICK_ACTORS_FOLLOW_CAMERA ||
++        tank_room_checkpoint() || saved_forest_checkpoint()))
+@@ -931,3 +954,3 @@
+-    } else if (s_waitExcavationLift) {
+-        /* A moving camera does not emit CAM1. The lift has established the
+-         * authored follow heading; recenter it on the restored player. */
++    } else if (s_waitExcavationLift || s_restoreForestParty) {
++        /* These entrance scripts have established their follow heading.
++         * A moving camera does not emit CAM1. Recenter on the saved pose. */
+@@ -1007,0 +1031,32 @@
++void PcPort_QuickCheckpointFieldScriptsReady(unsigned script_bytes)
++{
++    PcPort_QuickCheckpointRestoreTankRoom(script_bytes);
++    s_restoreForestParty = 0;
++    if (!s_restoreReady || (g_GameSceneMapNum & 0x3fff) != FOREST_FIELD ||
++        !saved_forest_checkpoint() || !g_ArchiveHeader || ArchiveGetDiscNumber() != 2 ||
++        g_FieldScriptMemoryU16[1] != FOREST_ENTRANCE || g_PlayerActorIndex != 1 ||
++        script_bytes != FOREST_SCRIPT_BYTES || D_800ADBFC != FOREST_ACTORS ||
++        !g_FieldActors || !g_FieldActors[1].pActorData || !g_FieldActors[2].pActorData ||
++        !g_FieldActors[FOREST_CONTROLLER].pActorData || !g_FieldCurScriptFile ||
++        g_FieldCurScriptFile->numScripts != FOREST_ACTORS ||
++        g_FieldScriptVMCurScriptData != (u8 *)g_FieldCurScriptFile + 0x84 + FOREST_ACTORS * 64 ||
++        checkpoint_script_hash(g_FieldCurScriptFile, script_bytes) != 0x0280ebc1u)
++        return;
++
++    /* Resume the authored handback after dialogue 22. The VM resets Elly's
++     * animation, releases input, regroups the party, restores the follow
++     * camera and parks this controller. A new visit runs the full scene. */
++    ActorData *controller = (ActorData *)(uintptr_t)g_FieldActors[FOREST_CONTROLLER].pActorData;
++    controller->scripts[0].currentIP = FOREST_HANDBACK;
++    controller->scripts[0].flags_0x12 = 7;
++    controller->scriptInstructionPointer = FOREST_HANDBACK;
++    s_restoreForestParty = 1;
++}
++
++static void regroup_forest_party(void)
++{
++    /* Field construction can run the handback before the saved pose is
++     * applied. Rebuild the follower trail at Fei's restored coordinates. */
++    checkpoint_instruction(FOREST_CONTROLLER, FOREST_REGROUP);
++}
++
+@@ -1171,0 +1227,2 @@
++    if (s_restoreForestParty)
++        regroup_forest_party();
+@@ -1223,0 +1281 @@
++    s_restoreForestParty = 0;
+diff --git a/pc_port/src/quick_checkpoint.h b/pc_port/src/quick_checkpoint.h
+index 9d71a35722b01b4e274603ede20e4de4b8169b90..114b5f548cca8d3ccb1fac45f2d3a3c2b4f89083 100644
+--- a/pc_port/src/quick_checkpoint.h
++++ b/pc_port/src/quick_checkpoint.h
+@@ -22,0 +23 @@
++void PcPort_QuickCheckpointFieldScriptsReady(unsigned scriptBytes);
+diff --git a/pc_port/tests/quick_checkpoint_restore_test.c b/pc_port/tests/quick_checkpoint_restore_test.c
+index ce6d7fbc7923dc117b1296f92b3c513d980c4f25..a80b0aa380a7732854290a4a40dba8726e111f83 100644
+--- a/pc_port/tests/quick_checkpoint_restore_test.c
++++ b/pc_port/tests/quick_checkpoint_restore_test.c
+@@ -25,0 +26 @@
++static int s_restoreForestParty;
+@@ -39,0 +41 @@
++static void regroup_forest_party(void) { abort(); }
+diff --git a/src/field/main/misc3.c b/src/field/main/misc3.c
+index 3f7adcf1b2c212d28170ce6c8daa2abe5e5609ac..5c817e8ce24a063210040e80a258e1875a43d894 100644
+--- a/src/field/main/misc3.c
++++ b/src/field/main/misc3.c
+@@ -1336 +1336 @@
+-    PcPort_QuickCheckpointRestoreTankRoom(scriptBytes);
++    PcPort_QuickCheckpointFieldScriptsReady(scriptBytes);
