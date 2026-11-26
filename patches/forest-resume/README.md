@@ -1,10 +1,10 @@
 # Disc 2 forest checkpoints
 
-These private engine changes resume the forest controller after a cold load and check its handback before restoring the saved player pose. New checkpoints also preserve the earned follower and camera state. The accompanying tests exercise checkpoint identity and refusal boundaries. A test that reads the original field script takes it from the player’s local game data.
+These private engine changes resume the forest controller after a cold load and check its handback before restoring the saved player pose. New checkpoints also preserve the earned follower and camera state. The accompanying tests exercise checkpoint identity and refusal boundaries. The last, test-only patch updates the estate-camera fixture and exercises the forest path when the user supplies Disc 2. The packaged production source remains `f4ddc36469b9490cce20b293c553b2a080b6dfbf`. A test that reads the original field script takes it from the player’s local game data.
 
 ## Apply the patches
 
-Use a clean private engine checkout at `af746eead91bbe5725fe2d4c415f51dbe7a7ea9d`. Set `patch_dir` to the absolute path of this directory. These commands verify the complete file tree after each patch with the starting checkout’s copy of `HANDOVER.md`.
+Use a clean private engine checkout at `af746eead91bbe5725fe2d4c415f51dbe7a7ea9d`. Set `patch_dir` to the absolute path of this directory. These commands verify the complete file tree after each patch with the starting checkout’s private documentation.
 
 ```sh
 test "$(git rev-parse HEAD)" = af746eead91bbe5725fe2d4c415f51dbe7a7ea9d
@@ -21,13 +21,17 @@ test "$(git write-tree)" = 06a2465966c719539927b45aac195f2dc88cecfe
 git apply --unidiff-zero --index --check "$patch_dir/forest-save-follow-camera.patch"
 git apply --unidiff-zero --index "$patch_dir/forest-save-follow-camera.patch"
 test "$(git write-tree)" = 355d50fa90f34633cc334455e94615a169b54d79
+git apply --unidiff-zero --index --check "$patch_dir/forest-fixture-maintenance.patch"
+git apply --unidiff-zero --index "$patch_dir/forest-fixture-maintenance.patch"
+test "$(git write-tree)" = 3b9ac739926d0eb1f2503c02ef5e6e7b0c707a5b
 ```
 
-Engineering commit `5559cdc3b9298c3181966049c3119dbef3675572` updated only `HANDOVER.md` between the focused tests and the ordered handback correction. The source and tests are already complete after the sequence above. To reproduce the recorded engineering tree including that documentation, run these additional commands in a checkout that has the documentation commit.
+The source and tests are complete after the sequence above. Engineering commit `5559cdc3b9298c3181966049c3119dbef3675572` updated `HANDOVER.md`. Engineering commit `aa0b9d25766bc5c8070d21cfd9466f3a80c17942` also updated `docs/port/NATIVE_CONVERSION.md` while changing the test runner. To reproduce the recorded engineering tree including those private documents, run these additional commands in a checkout that has both commits.
 
 ```sh
 git restore --source=5559cdc3b9298c3181966049c3119dbef3675572 --staged --worktree -- HANDOVER.md
-test "$(git write-tree)" = 52a3a576ceb9ade7c92507dbd166a2d5910509d2
+git restore --source=aa0b9d25766bc5c8070d21cfd9466f3a80c17942 --staged --worktree -- docs/port/NATIVE_CONVERSION.md
+test "$(git write-tree)" = 2014d702f1e8686ad986e4f06ce75c23bdc920fd
 ```
 
 | Patch | SHA-256 | Private engineering commit |
@@ -36,6 +40,7 @@ test "$(git write-tree)" = 52a3a576ceb9ade7c92507dbd166a2d5910509d2
 | forest-resume-tests.patch | `9b0a5effc100273fc78dcd36c13e1ff0bbd896b2f3e7e129b51511d60ef3f2b6` | `370e10b9d6cde39f7362012f7a792fe5129d6cfe` |
 | forest-ordered-handback.patch | `1bb20827a5ef027c3595c59d9d27b1302572d9630f413f33e9edf902c45a7cc8` | `4235be4dce40f62f67570869ea636ad2b39f2162` |
 | forest-save-follow-camera.patch | `923ad6ce3f3590a579b155be3286c267eb2bf325841647d2c0c3424db3b7398c` | `f4ddc36469b9490cce20b293c553b2a080b6dfbf` |
+| forest-fixture-maintenance.patch | `28ef09d96dc7247c5fb43892f69b32cc0762ca008fcdaca3e01a7c1cf8ea9a8b` | `da6618e27b5c7ae664564574eba49b264d557379` |
 
 ## Install the private repository guard
 

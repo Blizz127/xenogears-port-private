@@ -1,0 +1,66 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Xenogears Port <port@xenogears.invalid>
+Date: Thu, 26 Nov 2026 03:24:11 +0000
+Subject: [PATCH] Cover the estate camera timing and both Disc 2 regression
+ fixtures
+
+
+diff --git a/pc_port/tests/quick_checkpoint_estate_camera_test.c b/pc_port/tests/quick_checkpoint_estate_camera_test.c
+index 5d25ff43e7887826717bda8233023871ebc1226e..9f8be1012dc3cf7499a1dc84c9894a173cb57d9c 100644
+--- a/pc_port/tests/quick_checkpoint_estate_camera_test.c
++++ b/pc_port/tests/quick_checkpoint_estate_camera_test.c
+@@ -11 +11 @@
+-#include "quick_checkpoint_file.h"
++#include "quick_checkpoint_cave_actors.h"
+@@ -32 +32 @@
+-s32 D_800B21D8, D_800ADBA8;
++s32 D_800B21D8, D_800ADBA8, D_800ADBAC;
+@@ -485 +485 @@
+-    assert(capture_field_follow_camera(bytes));
++    assert(capture_field_follow_camera(bytes, 0));
+@@ -489 +489 @@
+-    assert(restore_field_follow_camera(bytes));
++    assert(restore_field_follow_camera(bytes, NULL));
+@@ -513 +513 @@
+-    assert(capture_field_follow_camera(bytes));
++    assert(capture_field_follow_camera(bytes, 0));
+@@ -515 +515 @@
+-    assert(restore_field_follow_camera(bytes));
++    assert(restore_field_follow_camera(bytes, NULL));
+@@ -529 +529 @@
+-    assert(capture_field_follow_camera(bytes));
++    assert(capture_field_follow_camera(bytes, 0));
+@@ -533,2 +533,2 @@
+-    assert(!capture_field_follow_camera(scratch));
+-    assert(!restore_field_follow_camera(bytes));
++    assert(!capture_field_follow_camera(scratch, 0));
++    assert(!restore_field_follow_camera(bytes, NULL));
+@@ -541 +541 @@
+-    assert(!restore_field_follow_camera(bytes));
++    assert(!restore_field_follow_camera(bytes, NULL));
+@@ -548 +548 @@
+-    assert(!restore_field_follow_camera(bytes));
++    assert(!restore_field_follow_camera(bytes, NULL));
+diff --git a/pc_port/tests/run_quick_checkpoint_gate_test.sh b/pc_port/tests/run_quick_checkpoint_gate_test.sh
+index 28dcc85cc92d28b0ad2c8b8c4c85b75b64cbd857..b41a29610170d496c7149f4a9e1d201cf918ae8d 100755
+--- a/pc_port/tests/run_quick_checkpoint_gate_test.sh
++++ b/pc_port/tests/run_quick_checkpoint_gate_test.sh
+@@ -8,4 +8,2 @@
+-  # The positive tank-room case uses the owner's field script without retaining
+-  # any disc bytes in the test suite.
+-  export XENO_QUICK_TEST_TANK_SCRIPT="$out/field616.script"
+-  PYTHONDONTWRITEBYTECODE=1 python3 - "$XENO_DISC2" "$XENO_QUICK_TEST_TANK_SCRIPT" <<'PY'
++  # Extract the two original field scripts into test-local temporary storage.
++  PYTHONDONTWRITEBYTECODE=1 python3 - "$XENO_DISC2" "$out" <<'PY'
+@@ -20 +18,4 @@
+-    package = disc.read_entry(FIELD_MAP_FIRST_ENTRY + 2 * 616)
++    for field in (614, 616):
++        package = disc.read_entry(FIELD_MAP_FIRST_ENTRY + 2 * field)
++        script = lzss_decompress(package[u32(package, 0x144):])
++        (Path(sys.argv[2]) / f"field{field}.script").write_bytes(script)
+@@ -23,2 +23,0 @@
+-script = lzss_decompress(package[u32(package, 0x144):])
+-Path(sys.argv[2]).write_bytes(script)
+@@ -25,0 +25,2 @@
++  export XENO_QUICK_TEST_TANK_SCRIPT="${XENO_QUICK_TEST_TANK_SCRIPT:-$out/field616.script}"
++  export XENO_QUICK_TEST_FOREST_SCRIPT="${XENO_QUICK_TEST_FOREST_SCRIPT:-$out/field614.script}"
