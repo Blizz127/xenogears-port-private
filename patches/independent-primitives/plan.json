@@ -1,0 +1,527 @@
+{
+  "format": 1,
+  "files": {
+    "pc_port/THIRD_PARTY.md": {
+      "before": {
+        "mode": "100644",
+        "blob": "468e2bd69fdd0c6a4346fcbe5b49fc88adf6764d",
+        "size": 5463,
+        "sha256": "e8d86b22ca5264cbc3b12498f780b657405b5a52aeb8798ff2f5c0f5ef1a5870"
+      },
+      "after": {
+        "mode": "100644",
+        "blob": "f8a0cb4017bc71fbd5de838f4cbc5d782f0d4fe9",
+        "size": 5796,
+        "sha256": "a83c220a3fa0c38ec76c2d463afdc9d9d2ce918ec569870551ec1bb742642f60"
+      },
+      "added_sha256": "d363e48b4ff63cc71069251299a500e2d881f2fe2d30f8538e6fd92b72b35290",
+      "spans": [
+        [
+          "base",
+          0,
+          2799
+        ],
+        [
+          "added",
+          0,
+          333
+        ],
+        [
+          "base",
+          2799,
+          2664
+        ]
+      ]
+    },
+    "pc_port/build_port.sh": {
+      "before": {
+        "mode": "100755",
+        "blob": "d5085a39d292ec6d8f20b8cbca75f74712aea393",
+        "size": 104771,
+        "sha256": "290320df75c0a0a8394d5a80d435f5ebba252e11dffc25c129190496f0b16faa"
+      },
+      "after": {
+        "mode": "100755",
+        "blob": "e9b7c8755bd85dd08f439f4b497bbd662b4effee",
+        "size": 104966,
+        "sha256": "ed3889f1a0ebdc6fb431f31e6880548a14ce7db6482912f4eea0b43746557570"
+      },
+      "added_sha256": "0ffaf8663117368f9f52e6d8c56eeec9e5722f988ac213aced7d82fc70c37b4a",
+      "spans": [
+        [
+          "base",
+          0,
+          24799
+        ],
+        [
+          "added",
+          0,
+          131
+        ],
+        [
+          "base",
+          24947,
+          24276
+        ],
+        [
+          "added",
+          131,
+          126
+        ],
+        [
+          "base",
+          49223,
+          114
+        ],
+        [
+          "added",
+          257,
+          86
+        ],
+        [
+          "base",
+          49337,
+          55434
+        ]
+      ]
+    },
+    "pc_port/patches/psycross_field_fixed_uv.patch": {
+      "before": {
+        "mode": "100644",
+        "blob": "8bde2cb0dae2d024312583205903c47b8dcd7124",
+        "size": 14495,
+        "sha256": "9c65dab323c11334d4b8bf5bc6389fd40232f8844edc1372cee714348149f3d0"
+      },
+      "after": {
+        "mode": "100644",
+        "blob": "954ac0e2c713b157fbb347096f42100d1080368c",
+        "size": 14485,
+        "sha256": "49c586a24d407219c278c68c68f96557449e8dfd40e07b9f0391d050535d38ec"
+      },
+      "added_sha256": "fb965ea7abefba003aeacb3a5d36a1a1b52c688351dbcca430da31cefd4fd50b",
+      "spans": [
+        [
+          "base",
+          0,
+          1393
+        ],
+        [
+          "added",
+          0,
+          67
+        ],
+        [
+          "base",
+          1470,
+          13025
+        ]
+      ]
+    },
+    "pc_port/patches/psycross_field_polygon_coverage.patch": {
+      "before": {
+        "mode": "100644",
+        "blob": "005e02e18ac78f52f0ae7223cdc58c81d90898fd",
+        "size": 9623,
+        "sha256": "763ac5001f460c164fc21035b0f87a4bc6b9e3be52cfc9fc42c2d1f70e883331"
+      },
+      "after": {
+        "mode": "100644",
+        "blob": "76c791c3c05d141ba54d3cae29ffddcdaa2c693d",
+        "size": 8704,
+        "sha256": "613365097c134184112f753955ffc3360a35d15749b111a651f101a5e8d505b4"
+      },
+      "added_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "spans": [
+        [
+          "base",
+          919,
+          8704
+        ]
+      ]
+    },
+    "pc_port/patches/psycross_fixed_uv.patch": {
+      "before": {
+        "mode": "100644",
+        "blob": "80883ec7232a477741a3a9cd9b231723d80b898f",
+        "size": 16931,
+        "sha256": "df4b67d9bd20f80bc42762a088bcc03733306e78da37105f5c77f79344064857"
+      },
+      "after": {
+        "mode": "100644",
+        "blob": "23d5d9c968b5e441c9991e0301bd1d9f29affc38",
+        "size": 11427,
+        "sha256": "6f95f7920d4e5a40045d4c34995ce862e9f3c3c9f3b4226138c83cc1e6f4c3dd"
+      },
+      "added_sha256": "140a35a386a42799a1519d910bd145fafd019ede02444c10ef298036ae3890ba",
+      "spans": [
+        [
+          "base",
+          0,
+          888
+        ],
+        [
+          "base",
+          6382,
+          696
+        ],
+        [
+          "added",
+          0,
+          67
+        ],
+        [
+          "base",
+          7155,
+          9776
+        ]
+      ]
+    },
+    "pc_port/patches/psycross_opaque_quad_viewport.patch": {
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "blob": "ec75a50c12979d896c40b127ee5c326eac1dc007",
+        "size": 3161,
+        "sha256": "0cf1d5266cfd2e6cb26d23b553e4d9a9019f179db71256512bc758234c47d26c"
+      },
+      "added_sha256": "0cf1d5266cfd2e6cb26d23b553e4d9a9019f179db71256512bc758234c47d26c",
+      "spans": [
+        [
+          "added",
+          0,
+          3161
+        ]
+      ]
+    },
+    "pc_port/patches/psycross_win64_platform.patch": {
+      "before": {
+        "mode": "100644",
+        "blob": "c3b1a174c9359b4f04c8d58e02840d86206f5d2f",
+        "size": 8810,
+        "sha256": "89a93d8e8d0eeef2b8b2810d7806d1da4400df6bce7bfabd72ed5b0c36e66f25"
+      },
+      "after": {
+        "mode": "100644",
+        "blob": "d26a59fd73c0b95ef290835290bbaa94e928ca6b",
+        "size": 8778,
+        "sha256": "14cc4d4bd0b2cf46de1e13354b550deb50e23d33ed1cbf8d49937204042c8e48"
+      },
+      "added_sha256": "32c782f9e27e83b84e01ae87c5dc2d1ab147231b74deedc0e9a4db5bfc4174bf",
+      "spans": [
+        [
+          "base",
+          0,
+          8676
+        ],
+        [
+          "added",
+          0,
+          18
+        ],
+        [
+          "base",
+          8726,
+          84
+        ]
+      ]
+    },
+    "pc_port/psycross.lock": {
+      "before": {
+        "mode": "100644",
+        "blob": "77ad48664f90fec6cc6c7338ffe3aa6515b9260e",
+        "size": 476,
+        "sha256": "152fc1fe1135e11882d97313310cd8f97e5314747ac5d877e781e6f4556d8bf8"
+      },
+      "after": {
+        "mode": "100644",
+        "blob": "f95fe0703ad7ec2d3e3fd5b6f16576547b9b68bb",
+        "size": 461,
+        "sha256": "d1263b88f3c6ceb2537c196c29b73fd1276bf5a3108344938d1e25a572e1b758"
+      },
+      "added_sha256": "aed3035f9077ab377b0e7b9db60104e508dc9fcc44f1175864eb821acf5b6b47",
+      "spans": [
+        [
+          "base",
+          0,
+          228
+        ],
+        [
+          "added",
+          0,
+          125
+        ],
+        [
+          "base",
+          368,
+          108
+        ]
+      ]
+    },
+    "pc_port/src/renderer/PROVENANCE.md": {
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "blob": "e6b1b75c37efa104bf211bed837d25221cc06241",
+        "size": 1841,
+        "sha256": "433d4c644693720821f96800837372f68c643ac7a04870f76fca0096eea7b0bd"
+      },
+      "added_sha256": "433d4c644693720821f96800837372f68c643ac7a04870f76fca0096eea7b0bd",
+      "spans": [
+        [
+          "added",
+          0,
+          1841
+        ]
+      ]
+    },
+    "pc_port/src/renderer/PsyX_fixed_uv.cpp": {
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "blob": "cf6fd95ed34b0ebdb0f795326c5c2cd4dd3822e2",
+        "size": 4104,
+        "sha256": "1375995751db59fe3587a1e0073064a2a5a1016f9d49473759eb433f1bb3aab7"
+      },
+      "added_sha256": "1375995751db59fe3587a1e0073064a2a5a1016f9d49473759eb433f1bb3aab7",
+      "spans": [
+        [
+          "added",
+          0,
+          4104
+        ]
+      ]
+    },
+    "pc_port/src/renderer/PsyX_fixed_uv.h": {
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "blob": "23d794caaefaaaaeab52b7a4ec623b24777c6032",
+        "size": 386,
+        "sha256": "56d07b066615b4350f33a91245c89d1872949840b1552c6efdbfa847159b46eb"
+      },
+      "added_sha256": "56d07b066615b4350f33a91245c89d1872949840b1552c6efdbfa847159b46eb",
+      "spans": [
+        [
+          "added",
+          0,
+          386
+        ]
+      ]
+    },
+    "pc_port/tests/psycross_patch_replay_test.py": {
+      "before": {
+        "mode": "100644",
+        "blob": "5fbcbdc7d02b960b2948de824385353777007ba3",
+        "size": 7934,
+        "sha256": "3b112818aeb12f4d8c9e0ffe287edda81d692618778b83fdec09216b71e6f384"
+      },
+      "after": {
+        "mode": "100644",
+        "blob": "5f9f815952bbf9da28127ff86a7dd64973821ba0",
+        "size": 8610,
+        "sha256": "6fcef59105a41d38e2e3f2c95ee16fd3201b17791515f9f746cee3f9abd00eb1"
+      },
+      "added_sha256": "426786924092f276d44168adaf2492725d51299a30a6b1dd5c8409c3a8b32720",
+      "spans": [
+        [
+          "base",
+          0,
+          473
+        ],
+        [
+          "added",
+          0,
+          95
+        ],
+        [
+          "base",
+          473,
+          1149
+        ],
+        [
+          "added",
+          95,
+          421
+        ],
+        [
+          "base",
+          1622,
+          1280
+        ],
+        [
+          "added",
+          516,
+          194
+        ],
+        [
+          "base",
+          2940,
+          1939
+        ],
+        [
+          "added",
+          710,
+          96
+        ],
+        [
+          "base",
+          4975,
+          223
+        ],
+        [
+          "added",
+          806,
+          56
+        ],
+        [
+          "base",
+          5254,
+          82
+        ],
+        [
+          "added",
+          862,
+          45
+        ],
+        [
+          "base",
+          5377,
+          2557
+        ]
+      ]
+    },
+    "pc_port/tests/psycross_texture_modulation_test.cpp": {
+      "before": {
+        "mode": "100644",
+        "blob": "00ea282d2bb74dc2c8d0a1cdd9721e1766732dc7",
+        "size": 18679,
+        "sha256": "0edf51493be5bb4cca8530112d3cf4152c9bbdaf31cec75bd1de97b462bfe072"
+      },
+      "after": {
+        "mode": "100644",
+        "blob": "9ba9e0bce80d498c504e833b8f34c63b7cdff20a",
+        "size": 21515,
+        "sha256": "72ee6a807da5b3067efb8fadff6acefc06f30a4379f15b9cd5ee6ef7a17cb1c8"
+      },
+      "added_sha256": "69eb52f510c84b4773642f1ed8b67d193a036a0bd18410e978ce013750577027",
+      "spans": [
+        [
+          "base",
+          0,
+          12976
+        ],
+        [
+          "added",
+          0,
+          2808
+        ],
+        [
+          "base",
+          12976,
+          4825
+        ],
+        [
+          "added",
+          2808,
+          84
+        ],
+        [
+          "base",
+          17857,
+          822
+        ]
+      ]
+    },
+    "pc_port/tools/install_psycross_uv_rows.py": {
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "blob": "35ee46ffbfec046b062d67f02c65378c8da4837b",
+        "size": 1833,
+        "sha256": "ac86257909084c594006a90ce5c58cbd36aced137164440336b513016a6a1055"
+      },
+      "added_sha256": "ac86257909084c594006a90ce5c58cbd36aced137164440336b513016a6a1055",
+      "spans": [
+        [
+          "added",
+          0,
+          1833
+        ]
+      ]
+    },
+    "pc_port/tools/psycross_patch_replay.sh": {
+      "before": {
+        "mode": "100755",
+        "blob": "ca39513dfadd8c5f396c4806a8bd85d279e8bae4",
+        "size": 7246,
+        "sha256": "5366def39271871b6c82c8042aba36b19993fb00ad1955d9e0ccc3f5e4651f41"
+      },
+      "after": {
+        "mode": "100755",
+        "blob": "d102f2873e7edf9b80999447c663b477698f4623",
+        "size": 7291,
+        "sha256": "f678a8a099264a6a29fe8ded4e3fafd31254cddab5631219741d0103cb2c0d18"
+      },
+      "added_sha256": "c2164b81c143d425bc82efe114c449bfcad4b095445a45c44efb57cc2f7a3c7e",
+      "spans": [
+        [
+          "base",
+          0,
+          2296
+        ],
+        [
+          "added",
+          0,
+          45
+        ],
+        [
+          "base",
+          2296,
+          4950
+        ]
+      ]
+    },
+    "src/slus_006.64/system/system.c": {
+      "before": {
+        "mode": "100644",
+        "blob": "36219e01b9814b33ec171c83991d0c0dc183bf41",
+        "size": 56086,
+        "sha256": "7a91588cdba671580d6d931a14691c3754c9292fb8bc60d3c29946a2ff359da7"
+      },
+      "after": {
+        "mode": "100644",
+        "blob": "dc64a12bac07e12217b6ad5ed563ee57f08bde71",
+        "size": 56139,
+        "sha256": "ce2fa362042dc39208411b35d4966e1c9af0baf1650a70aaffba9136f9ae4a54"
+      },
+      "added_sha256": "994d62aea2f49ab6bae8cba8e85d09db6ffced229f08c7c43c6ce18c2e11f5f3",
+      "spans": [
+        [
+          "base",
+          0,
+          45
+        ],
+        [
+          "added",
+          0,
+          46
+        ],
+        [
+          "base",
+          45,
+          25
+        ],
+        [
+          "added",
+          46,
+          7
+        ],
+        [
+          "base",
+          70,
+          56016
+        ]
+      ]
+    }
+  }
+}

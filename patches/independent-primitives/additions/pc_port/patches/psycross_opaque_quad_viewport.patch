@@ -1,0 +1,86 @@
+diff --git a/src/gpu/PsyX_GPU.cpp b/src/gpu/PsyX_GPU.cpp
+--- a/src/gpu/PsyX_GPU.cpp
++++ b/src/gpu/PsyX_GPU.cpp
+@@ -64,0 +65 @@
++	bool hasObliqueQuads;
+@@ -790,0 +792 @@
++	split.hasObliqueQuads = false;
+@@ -891,0 +894,2 @@
++
++extern bool GR_DrawObliqueQuadRuns(int first, int count);
+@@ -927 +931,2 @@
+-	GR_DrawTriangles(split.startVertex, split.numVerts / 3);
++	if (!split.hasObliqueQuads || !GR_DrawObliqueQuadRuns(split.startVertex, split.numVerts))
++		GR_DrawTriangles(split.startVertex, split.numVerts / 3);
+@@ -1485 +1490,14 @@
+-		g_vertexIndex += TriangulatePolygonQuad(poly);
++		const int vertices = TriangulatePolygonQuad(poly);
++#if !USE_PGXP
++		// EmitOpaqueQuad already handled canonical horizontal-edged quads.
++		const bool foldedHorizontal = poly->y1 == poly->y2 &&
++		    ((poly->y0 < poly->y1) == (poly->y3 < poly->y1));
++		if (polyTag->code == 0x28 && vertices && !foldedHorizontal && IsCanonicalRasterPoint(&poly->x0) &&
++		    IsCanonicalRasterPoint(&poly->x1) && IsCanonicalRasterPoint(&poly->x2) &&
++		    IsCanonicalRasterPoint(&poly->x3))
++		{
++			firstVertex[0]._p0 = firstVertex[3]._p0 = 0x28;
++			g_splits[g_splitIndex].hasObliqueQuads = true;
++		}
++#endif
++		g_vertexIndex += vertices;
+diff --git a/src/render/PsyX_render.cpp b/src/render/PsyX_render.cpp
+--- a/src/render/PsyX_render.cpp
++++ b/src/render/PsyX_render.cpp
+@@ -1542,0 +1543,3 @@
++static const int XenoGuardViewport = 4096;
++static bool xenoGuardViewportSupported;
++
+@@ -1550,0 +1554,3 @@
++	GLint dims[2];
++	glGetIntegerv(GL_MAX_VIEWPORT_DIMS, dims);
++	xenoGuardViewportSupported = dims[0] >= XenoGuardViewport && dims[1] >= XenoGuardViewport;
+@@ -3265,0 +3272,44 @@
++// _xeno_oblique_quad_viewport: keep signed screen coordinates inside the
++// clip volume. Clipping an edge to the display before rasterization can
++// round a shared integer sample onto the wrong side. The framebuffer and
++// existing scissor still impose the visible limits.
++bool GR_DrawObliqueQuadRuns(int first, int count)
++{
++#if USE_OPENGL && !USE_PGXP
++	if (!count || !xenoGuardViewportSupported || g_PreviousOffscreenState ||
++	    g_lastBoundTexture != g_whiteTexture || !g_xenoUploadedVertices ||
++	    XenoPs1HalfPixelOriginEnabled() || g_sceneWidth != activeDispEnv.disp.w ||
++	    g_sceneHeight != activeDispEnv.disp.h)
++		return false;
++	GLint vp[4];
++	glGetIntegerv(GL_VIEWPORT, vp);
++	if (vp[2] != g_sceneWidth || vp[3] != g_sceneHeight)
++		return false;
++
++	const int half = XenoGuardViewport / 2;
++	const int end = first + count;
++	while (first < end)
++	{
++		const bool guarded = g_xenoUploadedVertices[first]._p0 == 0x28;
++		int next = first + 3;
++		while (next < end && (g_xenoUploadedVertices[next]._p0 == 0x28) == guarded)
++			next += 3;
++		if (guarded)
++		{
++			glViewport(vp[0] - half, vp[1] + vp[3] - half, XenoGuardViewport, XenoGuardViewport);
++			GR_Ortho2D(-half - 0.5f, half - 0.5f, half - 0.5f, -half - 0.5f, -1.0f, 1.0f);
++		}
++		glDrawArrays(GL_TRIANGLES, first, next - first);
++		if (guarded)
++		{
++			glViewport(vp[0], vp[1], vp[2], vp[3]);
++			GR_Ortho2D(0, vp[2], vp[3], 0, -1.0f, 1.0f);
++		}
++		first = next;
++	}
++	return true;
++#else
++	return false;
++#endif
++}
++

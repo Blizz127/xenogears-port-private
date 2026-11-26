@@ -85,3 +85,19 @@ test "$(git write-tree)" = 3d8dcc1eee4a67a1871753952e75f7ef0b70c48c
 ```
 
 In a clean Windows engineering checkout at `7a79bc5499c11684154255b84c03664b1f2ac61f`, applying this seventh patch by itself produces tree `7616acbb0468ed24ec87623c98dd145c7bea5a0c`, the complete source at `703cb99a8c2c3cd14026bd2fcccadb1ac8917ac5`.
+
+## Independent fixed-UV renderer and opaque quads
+
+The eighth step installs the independently written CPU texture-coordinate rows, updates the renderer patches and tests, and uses the host C library for a system source file in the PC build. The source plan covers sixteen files. It gives byte ranges for retained source in the preceding tree and supplies new lines in plain text under `patches/independent-primitives/additions`. Each file has an expected mode, Git blob ID and SHA-256 before and after reconstruction. Paths being added must be absent.
+
+Run the following from the private engineering checkout after applying the seventh step. The checkout and index should contain the same version of each affected file. The reconstruction script uses a temporary index and prints the resulting tree ID. The final two commands check and apply the change to the engineering checkout.
+
+```sh
+base=$(git write-tree)
+tree=$(python3 "$patch_dir/../independent-primitives/make_tree.py" . "$base")
+test "$tree" = 15522e98130dfedb32cc8ce09d726c55f4fec5e8
+git diff --binary --full-index "$base" "$tree" | git apply --index --check
+git diff --binary --full-index "$base" "$tree" | git apply --index
+```
+
+The expected tree above is for the seven-step portable Linux base. For the full Windows engineering base `703cb99a8c2c3cd14026bd2fcccadb1ac8917ac5`, use expected tree `4f88ed7689ae7f8709b5e2eeea13158adf5457eb` at Windows commit `220396b7b7ed13d0d13f3de1337ea4a0ce695031`. For the full Linux engineering base `2d7acef268cf8679df5c477e28d18e766c18ab49`, use expected tree `53d56f8fdfe0844ed5512e932802f90baa7edab4`. All sixteen files match Linux engineering commit `d7228d026e822d0f3c136af54c56348f1c796968`. That engineering commit also updates ten documentation, packaging and source-check files outside this series.

@@ -1,0 +1,2 @@
+# The build applies the port patches and source operations in build_port.sh.
+# Revalidate the series when updating this pin.
