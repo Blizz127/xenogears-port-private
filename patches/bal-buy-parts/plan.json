@@ -1,0 +1,109 @@
+{
+  "format": 1,
+  "files": {
+    "pc_port/src/robo_menu_root_links.c": {
+      "before": {
+        "mode": "100644",
+        "blob": "1035c30e9f79df4a763d4806254b4331700b5eef",
+        "size": 40320,
+        "sha256": "f8482b86f596cdc15ebb10e126df7b04accce672cba97e5bc870b65bd488ca5a"
+      },
+      "after": {
+        "mode": "100644",
+        "blob": "fbb8d04f9f6ebde0503801a54c394c5957c9985b",
+        "size": 40361,
+        "sha256": "e391423bbb218d2f30d6b3a056f985c5dcc3d4339d889556c7191cb2cb4a49e5"
+      },
+      "added_sha256": "eff1337f8d864f3dd2823d33d67a3c76cd102002ba4784706212ae10f824f7b1",
+      "spans": [
+        [
+          "base",
+          0,
+          4251
+        ],
+        [
+          "added",
+          0,
+          69
+        ],
+        [
+          "base",
+          4316,
+          101
+        ],
+        [
+          "added",
+          69,
+          160
+        ],
+        [
+          "base",
+          4535,
+          383
+        ],
+        [
+          "added",
+          229,
+          54
+        ],
+        [
+          "base",
+          4968,
+          15041
+        ],
+        [
+          "added",
+          283,
+          192
+        ],
+        [
+          "base",
+          20210,
+          20110
+        ]
+      ]
+    },
+    "pc_port/tests/robo_stock_cursor_predecessor_test.c": {
+      "before": {
+        "mode": "100644",
+        "blob": "9f3231fa1b303b57575e113a95317370c75f1344",
+        "size": 7942,
+        "sha256": "c2747b454b13d33cba180179e91353a56e4e30fd7b469ef80305a0c97e655dab"
+      },
+      "after": {
+        "mode": "100644",
+        "blob": "5ef75f1d3bd5d453ab70bb2d48811a0dfd33f73d",
+        "size": 10719,
+        "sha256": "037f2570e8a0a846c70007f770f84ffed21b03d280096df88fbe5f90691b8c16"
+      },
+      "added_sha256": "076de65feaf0a5a0ec5793c4f98d4d4f181327475677e8ad3265d0be57f989fb",
+      "spans": [
+        [
+          "base",
+          0,
+          5667
+        ],
+        [
+          "added",
+          0,
+          2637
+        ],
+        [
+          "base",
+          5667,
+          2259
+        ],
+        [
+          "added",
+          2637,
+          140
+        ],
+        [
+          "base",
+          7926,
+          16
+        ]
+      ]
+    }
+  }
+}
