@@ -1,0 +1,688 @@
+{
+  "format": 1,
+  "files": {
+    "pc_port/src/quick_checkpoint.c": {
+      "before": {
+        "mode": "100644",
+        "blob": "06f3ee5f692ed202384ba1661fb6b7fcf19af4f6",
+        "size": 62472,
+        "sha256": "e2134d079dbfa9251f2ea442b96ebb6e903b9e630157a188f17718236743f8cb"
+      },
+      "after": {
+        "mode": "100644",
+        "blob": "a78eb83e1bfeb9fdd868647a4284f8e7ecf3f4c5",
+        "size": 63263,
+        "sha256": "641f1ffda0649eb6a0a48d0af46856a945298aac810b1be02b91fff0d206f3b4"
+      },
+      "added_sha256": "8a5ff402bc911a9c876b2d2466e3f2e03addfecdcdc026365a14d49bcdc34168",
+      "spans": [
+        [
+          "base",
+          0,
+          3598
+        ],
+        [
+          "added",
+          0,
+          88
+        ],
+        [
+          "base",
+          3598,
+          7785
+        ],
+        [
+          "added",
+          88,
+          193
+        ],
+        [
+          "base",
+          11466,
+          9693
+        ],
+        [
+          "added",
+          281,
+          39
+        ],
+        [
+          "base",
+          21159,
+          6456
+        ],
+        [
+          "added",
+          320,
+          101
+        ],
+        [
+          "base",
+          27615,
+          2175
+        ],
+        [
+          "added",
+          421,
+          108
+        ],
+        [
+          "base",
+          29870,
+          12582
+        ],
+        [
+          "added",
+          529,
+          118
+        ],
+        [
+          "base",
+          42541,
+          4451
+        ],
+        [
+          "added",
+          647,
+          49
+        ],
+        [
+          "base",
+          46992,
+          763
+        ],
+        [
+          "added",
+          696,
+          70
+        ],
+        [
+          "base",
+          47755,
+          57
+        ],
+        [
+          "added",
+          766,
+          32
+        ],
+        [
+          "base",
+          47812,
+          9086
+        ],
+        [
+          "added",
+          798,
+          112
+        ],
+        [
+          "base",
+          56980,
+          2419
+        ],
+        [
+          "added",
+          910,
+          181
+        ],
+        [
+          "base",
+          59399,
+          2977
+        ],
+        [
+          "added",
+          1091,
+          34
+        ],
+        [
+          "base",
+          62376,
+          96
+        ]
+      ]
+    },
+    "pc_port/src/quick_checkpoint_cave_actors.c": {
+      "before": {
+        "mode": "100644",
+        "blob": "95e0a0902bbf2f66cdd95b1e065bd63f7f5b3bad",
+        "size": 48054,
+        "sha256": "df7416bc555ccea3c76c553ce9e68de1145ee6f574301105fa97db8078a582b7"
+      },
+      "after": {
+        "mode": "100644",
+        "blob": "5dabdc8b2aaec98d00f8ccab07d886da807d7e7c",
+        "size": 54930,
+        "sha256": "662ee4d758827324c9549651bf33a52c3f7df3eaffb8d25340fc0bc15df067a9"
+      },
+      "added_sha256": "838d0865e68f47134d49153eeb5f52642c4a8b85b90f5e164c110116879f96e5",
+      "spans": [
+        [
+          "base",
+          0,
+          109
+        ],
+        [
+          "added",
+          0,
+          26
+        ],
+        [
+          "base",
+          109,
+          2630
+        ],
+        [
+          "added",
+          26,
+          200
+        ],
+        [
+          "base",
+          2739,
+          7855
+        ],
+        [
+          "added",
+          226,
+          71
+        ],
+        [
+          "base",
+          10665,
+          319
+        ],
+        [
+          "base",
+          11055,
+          588
+        ],
+        [
+          "added",
+          297,
+          298
+        ],
+        [
+          "base",
+          11722,
+          3310
+        ],
+        [
+          "added",
+          595,
+          81
+        ],
+        [
+          "base",
+          15050,
+          13
+        ],
+        [
+          "added",
+          676,
+          161
+        ],
+        [
+          "base",
+          15063,
+          2104
+        ],
+        [
+          "added",
+          837,
+          3389
+        ],
+        [
+          "base",
+          17263,
+          60
+        ],
+        [
+          "added",
+          4226,
+          58
+        ],
+        [
+          "base",
+          17369,
+          180
+        ],
+        [
+          "added",
+          4284,
+          166
+        ],
+        [
+          "base",
+          17549,
+          106
+        ],
+        [
+          "added",
+          4450,
+          185
+        ],
+        [
+          "base",
+          17655,
+          86
+        ],
+        [
+          "added",
+          4635,
+          87
+        ],
+        [
+          "base",
+          17741,
+          17
+        ],
+        [
+          "added",
+          4722,
+          103
+        ],
+        [
+          "base",
+          17860,
+          61
+        ],
+        [
+          "added",
+          4825,
+          212
+        ],
+        [
+          "base",
+          17991,
+          514
+        ],
+        [
+          "added",
+          5037,
+          321
+        ],
+        [
+          "base",
+          18575,
+          90
+        ],
+        [
+          "added",
+          5358,
+          680
+        ],
+        [
+          "base",
+          18665,
+          446
+        ],
+        [
+          "added",
+          6038,
+          57
+        ],
+        [
+          "base",
+          19163,
+          114
+        ],
+        [
+          "added",
+          6095,
+          98
+        ],
+        [
+          "base",
+          19370,
+          132
+        ],
+        [
+          "added",
+          6193,
+          82
+        ],
+        [
+          "base",
+          19577,
+          87
+        ],
+        [
+          "added",
+          6275,
+          453
+        ],
+        [
+          "base",
+          19751,
+          5333
+        ],
+        [
+          "added",
+          6728,
+          1078
+        ],
+        [
+          "base",
+          25084,
+          22970
+        ]
+      ]
+    },
+    "pc_port/src/quick_checkpoint_cave_actors.h": {
+      "before": {
+        "mode": "100644",
+        "blob": "f98dd5135846943f3774a6f7134b0688d6e6d969",
+        "size": 2085,
+        "sha256": "cf94d1bdf67518a02a81c4bfb2a43492de8a1e9473f72616de24754fb2ba24f1"
+      },
+      "after": {
+        "mode": "100644",
+        "blob": "5e56c20a5313c7cdfd3906c3cd88f9d6341fc067",
+        "size": 2328,
+        "sha256": "ef44fff4ef035da4755ede4f4ae47c741d9b8435ba5544ea56f5abecae88882c"
+      },
+      "added_sha256": "81605f5d9af7ab7041d673e72fd055e484e801a7866c2e82d26c2cae94d23d1d",
+      "spans": [
+        [
+          "base",
+          0,
+          1563
+        ],
+        [
+          "added",
+          0,
+          243
+        ],
+        [
+          "base",
+          1563,
+          522
+        ]
+      ]
+    },
+    "pc_port/src/quick_checkpoint_taura_laboratory.inc": {
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "blob": "45a484b7448126e0775e55ed6396e22039c0b4fd",
+        "size": 5227,
+        "sha256": "5b3eccf8fb09256188ba9560fb2071b5b83fbf7cc31188703e0daf7bd20d16c9"
+      },
+      "added_sha256": "5b3eccf8fb09256188ba9560fb2071b5b83fbf7cc31188703e0daf7bd20d16c9",
+      "spans": [
+        [
+          "added",
+          0,
+          5227
+        ]
+      ]
+    },
+    "pc_port/tests/quick_checkpoint_cave_actors_test.c": {
+      "before": {
+        "mode": "100644",
+        "blob": "9a57802e1294ce395bc6129f2a1e0f64635fc2c4",
+        "size": 52072,
+        "sha256": "8cb34faef6bbffab49ff7e785a8e0abc6e5e4c8d2db9edda1911f1a39a1fdf55"
+      },
+      "after": {
+        "mode": "100644",
+        "blob": "5f94514e846e7deae404f3f2d0cb3cb94dcee167",
+        "size": 57506,
+        "sha256": "f67f840ca10c09c0d5ece8874916d9170a4c661e93bde514409598a63e83d80c"
+      },
+      "added_sha256": "265ea786823ed75dab31680abf94fcb21142df7004933e644d2628fb98008aa3",
+      "spans": [
+        [
+          "base",
+          0,
+          145
+        ],
+        [
+          "added",
+          0,
+          26
+        ],
+        [
+          "base",
+          145,
+          109
+        ],
+        [
+          "added",
+          26,
+          132
+        ],
+        [
+          "base",
+          369,
+          16
+        ],
+        [
+          "added",
+          158,
+          112
+        ],
+        [
+          "base",
+          503,
+          92
+        ],
+        [
+          "added",
+          270,
+          40
+        ],
+        [
+          "base",
+          595,
+          2976
+        ],
+        [
+          "added",
+          310,
+          176
+        ],
+        [
+          "base",
+          3605,
+          315
+        ],
+        [
+          "added",
+          486,
+          265
+        ],
+        [
+          "base",
+          3920,
+          3783
+        ],
+        [
+          "added",
+          751,
+          103
+        ],
+        [
+          "base",
+          7812,
+          43065
+        ],
+        [
+          "added",
+          854,
+          4836
+        ],
+        [
+          "base",
+          50877,
+          823
+        ],
+        [
+          "added",
+          5690,
+          120
+        ],
+        [
+          "base",
+          51700,
+          372
+        ]
+      ]
+    },
+    "pc_port/tests/quick_checkpoint_gate_test.c": {
+      "before": {
+        "mode": "100644",
+        "blob": "048dbe3ad1d15a47bb5892b2b8797abceed451c1",
+        "size": 85720,
+        "sha256": "a09764aedecd454556c698eea5cbfd03e4c07007f660fe6409f4468a9f9cd139"
+      },
+      "after": {
+        "mode": "100644",
+        "blob": "8bbf99e5357eaff52d8732866841ebc2e6df8fc5",
+        "size": 85816,
+        "sha256": "de0e8d10cb291de523d9f4ad2f4238a1e50122b7ac58145ab00c7edb6dd0b785"
+      },
+      "added_sha256": "a4987f6b9926c3624fb43f352c5bd398374b77f2b33c785b5b5dacf437c43de8",
+      "spans": [
+        [
+          "base",
+          0,
+          5185
+        ],
+        [
+          "added",
+          0,
+          156
+        ],
+        [
+          "base",
+          5300,
+          67134
+        ],
+        [
+          "added",
+          156,
+          55
+        ],
+        [
+          "base",
+          72434,
+          13286
+        ]
+      ]
+    },
+    "pc_port/tests/quick_checkpoint_restore_test.c": {
+      "before": {
+        "mode": "100644",
+        "blob": "871b67a1e271027a1c284eda6f7edf300d51d529",
+        "size": 12493,
+        "sha256": "911d4288d8870eeb11a010cc88f201c8ef059c455dea7c663538056b76710cf8"
+      },
+      "after": {
+        "mode": "100644",
+        "blob": "e2edec7ee0f6e38ba3fba4c8b579c4682d6bfc1d",
+        "size": 12746,
+        "sha256": "f1230bb69d9e0300c14a09bcc3fde3cb9fd81ba2f8c464951c4e0d579ed809c0"
+      },
+      "added_sha256": "71335ef488f9be9ae0e75b3faf3f32ba6066e52c8baac6ea505342b3fd3e6ad3",
+      "spans": [
+        [
+          "base",
+          0,
+          883
+        ],
+        [
+          "added",
+          0,
+          37
+        ],
+        [
+          "base",
+          883,
+          4168
+        ],
+        [
+          "added",
+          37,
+          216
+        ],
+        [
+          "base",
+          5051,
+          7442
+        ]
+      ]
+    },
+    "pc_port/tests/quick_checkpoint_tank_room_cases.inc": {
+      "before": {
+        "mode": "100644",
+        "blob": "bab7554de9ece912b99d3b965b235d4f240b513d",
+        "size": 22238,
+        "sha256": "2681614be3de05ba38e3ddf4cda38bf23ab9fca2f029a20248e134f33779a3b2"
+      },
+      "after": {
+        "mode": "100644",
+        "blob": "84d5012ff5fbd35f32fcfbf1cb58a8959616f659",
+        "size": 22709,
+        "sha256": "a2d170f9606a4a1f80374158e16263fa9a69aadf00bf8fdd26366d8095638dc8"
+      },
+      "added_sha256": "8b5de9206e435c94fcd2920249c7ce5f60a3fa5997eea811b77cefec9bad134b",
+      "spans": [
+        [
+          "base",
+          0,
+          5264
+        ],
+        [
+          "added",
+          0,
+          400
+        ],
+        [
+          "base",
+          5264,
+          2063
+        ],
+        [
+          "added",
+          400,
+          42
+        ],
+        [
+          "base",
+          7327,
+          14539
+        ],
+        [
+          "added",
+          442,
+          29
+        ],
+        [
+          "base",
+          21866,
+          372
+        ]
+      ]
+    },
+    "pc_port/tests/quick_checkpoint_taura_laboratory_cases.inc": {
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "blob": "347544a6cea573446bcb09d6b0ea17047dd3bff1",
+        "size": 11770,
+        "sha256": "b36e0bd7bff94b7ea95be72bf461ba8ff681710087fdefd1da57e6978cb710b1"
+      },
+      "added_sha256": "b36e0bd7bff94b7ea95be72bf461ba8ff681710087fdefd1da57e6978cb710b1",
+      "spans": [
+        [
+          "added",
+          0,
+          11770
+        ]
+      ]
+    }
+  }
+}
