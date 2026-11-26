@@ -1,0 +1,621 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Xenogears Port <port@xenogears.invalid>
+Date: Thu, 26 Nov 2026 03:22:32 +0000
+Subject: [PATCH] Preserve the earned forest follower and camera after the
+ field handback
+
+
+diff --git a/pc_port/src/quick_checkpoint.c b/pc_port/src/quick_checkpoint.c
+index 82f719bb0f30886845be068066d6e88cb98a7a0a..9bcda75b09a9d76fdb2f475c6b08aab2f9e2240c 100644
+--- a/pc_port/src/quick_checkpoint.c
++++ b/pc_port/src/quick_checkpoint.c
+@@ -58,0 +59 @@
++extern s32 D_800ADBAC; /* Normal follow reduces the smoothing distance every fourth update. */
+@@ -93,0 +95 @@
++static const ScriptsFile *s_forestScript;
+@@ -299,0 +302 @@
++        s_forestScript = NULL;
+@@ -515 +517,0 @@
+-static int capture_field_follow_camera(uint8_t out[128]);
+@@ -520,0 +523,19 @@
++enum { FOREST_FIELD = 614, FOREST_ENTRANCE = 2, FOREST_CONTROLLER = 12,
++       FOREST_ACTORS = 17, FOREST_SCRIPT_BYTES = 3608,
++       FOREST_HANDBACK = 0x39a, FOREST_CONTROL_HOLD = 0x3ae };
++
++static int capture_field_follow_camera(uint8_t out[128], int forest_party);
++
++static int forest_controller_parked(int require_control)
++{
++    if (!s_forestScript || g_FieldCurScriptFile != s_forestScript || !g_FieldActors ||
++        D_800ADBFC != FOREST_ACTORS || !g_FieldActors[FOREST_CONTROLLER].pActorData)
++        return 0;
++    const ActorData *controller = (const ActorData *)(uintptr_t)g_FieldActors[FOREST_CONTROLLER].pActorData;
++    if (controller->scripts[0].currentIP != FOREST_CONTROL_HOLD ||
++        controller->scripts[0].flags_0x12 != 7 || D_800B21D0)
++        return 0;
++    return !require_control || (controller->scriptInstructionPointer == FOREST_CONTROL_HOLD &&
++           !g_FieldScriptMemoryU16[0x400 / 2] && D_800ADB68 == 1 && D_800ADB64 == 0xff);
++}
++
+@@ -614,4 +635,13 @@
+-    if (!checkpoint->has_delayed_music && checkpoint->field_actor_kind == PC_PORT_QUICK_ACTORS_NONE &&
+-        capture_field_follow_camera(checkpoint->field_actors)) {
+-        checkpoint->field_actor_kind = PC_PORT_QUICK_ACTORS_FOLLOW_CAMERA;
+-        checkpoint->has_party_followers = PcPort_StreetFollowersCapture(checkpoint->party_followers);
++    if (!checkpoint->has_delayed_music && checkpoint->field_actor_kind == PC_PORT_QUICK_ACTORS_NONE) {
++        int forest = 0;
++        s32 step = g_CamInterpolation.atStepDistance;
++        if (forest_controller_parked(1) && step >= NORMAL_FOLLOW_CAMERA_STEP && step <= 20 &&
++            !(step & 1) && step == g_CamInterpolation.eyeStepDistance) {
++            PcPortForestCameraTiming timing = {(u8)step, (u8)(D_800ADBAC & 3)};
++            forest = PcPort_ForestPartyCapture(checkpoint->party_followers, timing);
++        }
++        if (capture_field_follow_camera(checkpoint->field_actors, forest)) {
++            checkpoint->field_actor_kind = PC_PORT_QUICK_ACTORS_FOLLOW_CAMERA;
++            checkpoint->has_party_followers = forest ||
++                                              PcPort_StreetFollowersCapture(checkpoint->party_followers);
++        }
+@@ -852,4 +881,0 @@
+-enum { FOREST_FIELD = 614, FOREST_ENTRANCE = 2, FOREST_CONTROLLER = 12,
+-       FOREST_ACTORS = 17, FOREST_SCRIPT_BYTES = 3608,
+-       FOREST_HANDBACK = 0x39a, FOREST_HOLD = 0x3ae };
+-
+@@ -1036,6 +1062,3 @@
+-    if (!s_restoreReady || (g_GameSceneMapNum & 0x3fff) != FOREST_FIELD ||
+-        !saved_forest_checkpoint() || !g_ArchiveHeader || ArchiveGetDiscNumber() != 2 ||
+-        g_FieldScriptMemoryU16[1] != FOREST_ENTRANCE || g_PlayerActorIndex != 1 ||
+-        script_bytes != FOREST_SCRIPT_BYTES || D_800ADBFC != FOREST_ACTORS ||
+-        !g_FieldActors || !g_FieldActors[1].pActorData || !g_FieldActors[2].pActorData ||
+-        !g_FieldActors[FOREST_CONTROLLER].pActorData || !g_FieldCurScriptFile ||
++    s_forestScript = NULL;
++    if ((g_GameSceneMapNum & 0x3fff) != FOREST_FIELD || !g_ArchiveHeader || ArchiveGetDiscNumber() != 2 ||
++        script_bytes != FOREST_SCRIPT_BYTES || D_800ADBFC != FOREST_ACTORS || !g_FieldCurScriptFile ||
+@@ -1045,0 +1069,5 @@
++    s_forestScript = g_FieldCurScriptFile;
++    if (!s_restoreReady || !saved_forest_checkpoint() || g_FieldScriptMemoryU16[1] != FOREST_ENTRANCE ||
++        g_PlayerActorIndex != 1 || !g_FieldActors || !g_FieldActors[1].pActorData ||
++        !g_FieldActors[2].pActorData || !g_FieldActors[FOREST_CONTROLLER].pActorData)
++        return;
+@@ -1057,7 +1084,0 @@
+-static int forest_handback_finished(void)
+-{
+-    const ActorData *controller = (const ActorData *)(uintptr_t)g_FieldActors[FOREST_CONTROLLER].pActorData;
+-    return controller->scripts[0].currentIP == FOREST_HOLD &&
+-           controller->scripts[0].flags_0x12 == 7 && !D_800B21D0;
+-}
+-
+@@ -1194 +1215,4 @@
+-    if (s_restoreForestParty && !forest_handback_finished())
++    /* The field VM owns the regroup and camera until it parks. Older saves
++     * carry only Fei's placement. A saved trail also needs normal follow. */
++    if (s_restoreForestParty && (!forest_controller_parked(s_loaded.has_party_followers) ||
++        (s_loaded.has_party_followers && g_FieldCameraMode != 0)))
+@@ -1230,4 +1254,3 @@
+-    /* The authored regroup walks until the party arrives and rounds X/Z
+-     * to world units. Only place the saved Q16 pose once that VM instruction
+-     * has finished, then seed the missing follower trail without moving Fei. */
+-    if (s_restoreForestParty && !s_loaded.has_party_followers)
++    PcPortForestCameraTiming forest_timing = {0};
++    if (s_restoreForestParty &&
++        (!s_loaded.has_party_followers || !PcPort_ForestPartyRestore(s_loaded.party_followers, &forest_timing)))
+@@ -1243 +1266 @@
+-    } else if (s_loaded.has_party_followers) {
++    } else if (s_loaded.has_party_followers && !s_restoreForestParty) {
+@@ -1247 +1270,2 @@
+-    } else if ((s_loaded.field_actor_kind == PC_PORT_QUICK_ACTORS_NONE ||
++    } else if (!s_restoreForestParty &&
++               (s_loaded.field_actor_kind == PC_PORT_QUICK_ACTORS_NONE ||
+@@ -1271 +1295 @@
+-        camera_restored = restore_field_follow_camera(s_loaded.field_actors);
++        camera_restored = restore_field_follow_camera(s_loaded.field_actors, forest_timing.step ? &forest_timing : NULL);
+diff --git a/pc_port/src/quick_checkpoint_cave_actors.c b/pc_port/src/quick_checkpoint_cave_actors.c
+index 1b84d925e16145e974e3eeaea3954ab702c3363f..4e1b0ad46da047b469bd272bc1a8642d78fb36a4 100644
+--- a/pc_port/src/quick_checkpoint_cave_actors.c
++++ b/pc_port/src/quick_checkpoint_cave_actors.c
+@@ -262 +262 @@
+-static int follower_ready(int leader, int partner, int character)
++static int follower_pair_ready(int leader, int partner, int character)
+@@ -275 +275 @@
+-           !(follower->scriptFlags.flags & 0x1800u) && !(field->status & ACTOR_STATUS_INVISIBLE) &&
++           !(follower->scriptFlags.flags & 0x1000u) && !(field->status & ACTOR_STATUS_INVISIBLE) &&
+@@ -279,0 +280,6 @@
++static int follower_ready(int leader, int partner, int character)
++{
++    return follower_pair_ready(leader, partner, character) &&
++           !(actor_data(partner)->scriptFlags.flags & 0x800u);
++}
++
+@@ -365,0 +372,78 @@
++/* Disc 2 field 614 has one follower. The field constructor owns the other
++ * actor flags, VM slots and animation resources. The follower update changes
++ * moving and use_trail independently on each step. */
++typedef struct {
++    u8 tag[4];
++    u16 moving, use_trail;
++    PartyFollower elly;
++    PcPortForestCameraTiming timing;
++    u16 reserved;
++} ForestParty;
++
++_Static_assert(offsetof(ForestParty, elly) == 8 &&
++               offsetof(ForestParty, timing) == 8 + PC_PORT_QUICK_BART_BYTES &&
++               sizeof(PcPortForestCameraTiming) == 2 &&
++               sizeof(ForestParty) == 12 + PC_PORT_QUICK_BART_BYTES &&
++               sizeof(ForestParty) <= PC_PORT_QUICK_PARTY_BYTES, "forest party layout");
++
++enum { WORKSHOP_FEI = 1, WORKSHOP_ELLY = 2, WORKSHOP_SCRIPT_ACTORS = 17 };
++
++static int workshop_party_ready(void)
++{
++    return (g_GameSceneMapNum & 0x3fff) == 614 && g_FieldScriptMemoryU16[0] == 249 &&
++           g_FieldScriptMemoryU16[1] == 2 && g_FieldScriptMemoryU16[2] == 615 &&
++           D_800ADBFC == WORKSHOP_SCRIPT_ACTORS && g_FieldNumActors >= WORKSHOP_SCRIPT_ACTORS &&
++           follower_pair_ready(WORKSHOP_FEI, WORKSHOP_ELLY, 1) &&
++           g_FieldActors[WORKSHOP_FEI].pSpriteData;
++}
++
++static int forest_camera_timing_valid(PcPortForestCameraTiming timing)
++{
++    return timing.step >= 8 && timing.step <= 20 && !(timing.step & 1u) && timing.phase < 4;
++}
++
++int PcPort_ForestPartyCapture(uint8_t out[PC_PORT_QUICK_PARTY_BYTES], PcPortForestCameraTiming timing)
++{
++    if (!out || !forest_camera_timing_valid(timing) || !workshop_party_ready())
++        return 0;
++    ForestParty saved;
++    memset(&saved, 0, sizeof saved);
++    memcpy(saved.tag, "F614", sizeof saved.tag);
++    saved.timing = timing;
++    const ActorData *elly = actor_data(WORKSHOP_ELLY);
++    saved.moving = elly->scriptFlags.flags & 0x800u;
++    saved.use_trail = elly->flags & 0x1000u;
++    capture_follower(&saved.elly, WORKSHOP_ELLY);
++    if (!valid_follower(&saved.elly))
++        return 0;
++    memset(out, 0, PC_PORT_QUICK_PARTY_BYTES);
++    memcpy(out, &saved, sizeof saved);
++    return 1;
++}
++
++int PcPort_ForestPartyRestore(const uint8_t in[PC_PORT_QUICK_PARTY_BYTES], PcPortForestCameraTiming *timing)
++{
++    if (!in || !timing || !workshop_party_ready())
++        return 0;
++    ForestParty saved;
++    memcpy(&saved, in, sizeof saved);
++    if (memcmp(saved.tag, "F614", sizeof saved.tag) || saved.reserved ||
++        !forest_camera_timing_valid(saved.timing) || (saved.moving & ~0x800u) || (saved.use_trail & ~0x1000u) ||
++        !valid_follower(&saved.elly))
++        return 0;
++    /* CavePose ends in two bytes of alignment padding. The writer leaves
++     * these and the rest of the fixed-size payload zero. */
++    enum { pose_end = __builtin_offsetof(ForestParty, elly.pose) + sizeof(CavePose) };
++    if (in[pose_end - 2] || in[pose_end - 1])
++        return 0;
++    for (size_t i = sizeof saved; i < PC_PORT_QUICK_PARTY_BYTES; ++i)
++        if (in[i])
++            return 0;
++    ActorData *elly = actor_data(WORKSHOP_ELLY);
++    restore_follower(&saved.elly, WORKSHOP_ELLY);
++    elly->scriptFlags.flags = (elly->scriptFlags.flags & ~0x800u) | saved.moving;
++    elly->flags = (elly->flags & ~0x1000u) | saved.use_trail;
++    *timing = saved.timing;
++    return 1;
++}
++
+diff --git a/pc_port/src/quick_checkpoint_cave_actors.h b/pc_port/src/quick_checkpoint_cave_actors.h
+index 63f10173a13c78fe7d7810b84cc990ebd0b88522..d6787f39e074dda9e1ddc8252b997e518097699c 100644
+--- a/pc_port/src/quick_checkpoint_cave_actors.h
++++ b/pc_port/src/quick_checkpoint_cave_actors.h
+@@ -20,0 +21,9 @@
++/* The forest follow camera reduces the shared step by two every fourth tick. */
++typedef struct {
++    uint8_t step, phase;
++} PcPortForestCameraTiming;
++
++/* Elly and the movement trail after the Disc 2 workshop handback. */
++int PcPort_ForestPartyCapture(uint8_t out[PC_PORT_QUICK_PARTY_BYTES], PcPortForestCameraTiming timing);
++int PcPort_ForestPartyRestore(const uint8_t in[PC_PORT_QUICK_PARTY_BYTES], PcPortForestCameraTiming *timing);
++
+diff --git a/pc_port/src/quick_checkpoint_estate_camera.inc b/pc_port/src/quick_checkpoint_estate_camera.inc
+index 22bc1eff6ea25866d168131b5c7e7b870adc7094..3963aeeeaf59d7429e6384b0fe91256a9260d33b 100644
+--- a/pc_port/src/quick_checkpoint_estate_camera.inc
++++ b/pc_port/src/quick_checkpoint_estate_camera.inc
+@@ -34 +34 @@
+-static int follow_camera_continuation_available(int allow_pitch_tween)
++static int follow_camera_continuation_available(int allow_pitch_tween, int forest_party)
+@@ -36,0 +37,5 @@
++    s32 step = g_CamInterpolation.atStepDistance;
++    if (step != g_CamInterpolation.eyeStepDistance ||
++        (step != NORMAL_FOLLOW_CAMERA_STEP &&
++         (!forest_party || step < NORMAL_FOLLOW_CAMERA_STEP || step > 20 || (step & 1))))
++        return 0;
+@@ -40,3 +45 @@
+-        g_Scene._pad66 || estate_camera_half(0x98) || (flags & ~8) ||
+-        g_CamInterpolation.atStepDistance != NORMAL_FOLLOW_CAMERA_STEP ||
+-        g_CamInterpolation.eyeStepDistance != NORMAL_FOLLOW_CAMERA_STEP)
++        g_Scene._pad66 || estate_camera_half(0x98) || (flags & ~8))
+@@ -111 +114 @@
+-    if (!follow_camera_continuation_available(0))
++    if (!follow_camera_continuation_available(0, 0))
+@@ -136 +139 @@
+-    if (!follow_camera_continuation_available(0))
++    if (!follow_camera_continuation_available(0, 0))
+@@ -222 +225 @@
+-static int capture_field_follow_camera(uint8_t out[128])
++static int capture_field_follow_camera(uint8_t out[128], int forest_party)
+@@ -225 +228 @@
+-    if (!follow_camera_continuation_available(1))
++    if (!follow_camera_continuation_available(1, forest_party))
+@@ -266 +269 @@
+-static int restore_field_follow_camera(const uint8_t in[128])
++static int restore_field_follow_camera(const uint8_t in[128], const PcPortForestCameraTiming *forest_timing)
+@@ -270 +273 @@
+-    if (!follow_camera_continuation_available(1))
++    if (!follow_camera_continuation_available(1, forest_timing != NULL))
+@@ -290,0 +294,4 @@
++    if (match && forest_timing) {
++        g_CamInterpolation.atStepDistance = g_CamInterpolation.eyeStepDistance = forest_timing->step;
++        D_800ADBAC = (D_800ADBAC & ~3) | forest_timing->phase;
++    }
+diff --git a/pc_port/tests/quick_checkpoint_cave_actors_test.c b/pc_port/tests/quick_checkpoint_cave_actors_test.c
+index 012cada23c78a27e97a63900d2e95fddf1e6deaa..b6f684a977f2500b58267fbc6b7f65dabcafdcac 100644
+--- a/pc_port/tests/quick_checkpoint_cave_actors_test.c
++++ b/pc_port/tests/quick_checkpoint_cave_actors_test.c
+@@ -1 +1 @@
+-/* US Disc 1 field 64 cave and field 23 Blackmoon follower checkpoints. */
++/* Field actor and follower checkpoints on both discs. */
+@@ -11 +11 @@
+-enum { FEI = 5, BART = 6, ROCK = 7, SLOTS = 8, TRAIL = 32, STRIDE = 0x48 };
++enum { FEI = 5, BART = 6, ROCK = 7, SLOTS = 8, FOREST_ACTORS = 17, TRAIL = 32, STRIDE = 0x48 };
+@@ -13,3 +13,3 @@
+-    FieldActor slot[SLOTS];
+-    ActorData actor[SLOTS];
+-    _Alignas(4) u8 sprite[SLOTS][0x180];
++    FieldActor slot[FOREST_ACTORS];
++    ActorData actor[FOREST_ACTORS];
++    _Alignas(4) u8 sprite[FOREST_ACTORS][0x180];
+@@ -93 +93 @@
+-        assert(sprite == scene.sprite[g_GameSceneMapNum == 71 ? BAL_FOLLOWER : ELLY]);
++        assert(sprite == scene.sprite[(g_GameSceneMapNum == 71 || g_GameSceneMapNum == 614) ? BAL_FOLLOWER : ELLY]);
+@@ -182,3 +182,3 @@
+-    FieldActor slots[SLOTS];
+-    ActorData actors[SLOTS];
+-    u8 sprites[SLOTS][0x180];
++    FieldActor slots[FOREST_ACTORS];
++    ActorData actors[FOREST_ACTORS];
++    u8 sprites[FOREST_ACTORS][0x180];
+@@ -805,0 +806,9 @@
++static int restore_workshop_party(const uint8_t *wire)
++{
++    PcPortForestCameraTiming timing = { .step = 0xee, .phase = 0xff };
++    int restored = PcPort_ForestPartyRestore(wire, &timing);
++    if (!restored)
++        assert(timing.step == 0xee && timing.phase == 0xff);
++    return restored;
++}
++
+@@ -828,0 +838,6 @@
++    assert(!PcPort_ForestPartyCapture(again, (PcPortForestCameraTiming){12, 2}));
++    assert_rejected(restore_workshop_party, data);
++    scene.actor[6].scriptFlags.flags |= 0x800;
++    assert(!PcPort_StreetFollowersCapture(again));
++    assert_rejected(PcPort_StreetFollowersRestore, data);
++    scene.actor[6].scriptFlags.flags &= ~0x800u;
+@@ -850,0 +866,124 @@
++/* Field 614/e2 after leaving the Disc 2 workshop. Native 09910d26's
++ * ordinary pre-F11 observation supplies both poses. The ring and flags in
++ * motion cases are synthetic, with one distinguishable value in every row. */
++static void workshop_party(void)
++{
++    enum { LEADER = 1, PARTNER = 2, HEADER = 8, POSE = 172, ROW = 48,
++           ROW_LAYER = 44, CURSORS = HEADER + POSE + TRAIL * ROW,
++           TIMING = HEADER + PC_PORT_QUICK_BART_BYTES, PARTY_END = TIMING + 2 };
++    u8 wire[PC_PORT_QUICK_PARTY_BYTES], bad[sizeof wire];
++    struct FieldImage original, entrance;
++    forest_setup();
++    g_GameSceneMapNum = 614;
++    test_script_words[0] = 249;
++    test_script_words[1] = 2;
++    test_script_words[2] = 615;
++    g_FieldNumActors = D_800ADBFC = FOREST_ACTORS;
++    g_PlayerActorIndex = D_8005A444[0] = LEADER;
++    D_8005A444[1] = PARTNER;
++    D_800AFB44[0] = D_800AFB44[1] = 128;
++    pose(LEADER, 0, (VECTOR){46158766, -24248320, -14658642, 0}, 92, 88);
++    pose(PARTNER, 1, (VECTOR){47513600, -24248320, -13303808, 0}, 92, 89);
++    scene.actor[LEADER].scriptFlags.flags = 0x04024430;
++    scene.actor[LEADER].walkmeshId = scene.actor[PARTNER].walkmeshId = 1;
++    ActorData *elly = &scene.actor[PARTNER];
++    elly->rotation = (SVECTOR){-28954, -28954, 3814, 0};
++    elly->scriptFlags.flags = 0x010204b0;
++    elly->flags = 0x04010400;
++    set_word(scene.sprite[PARTNER] + 0x80, (u16)-512);
++    D_800B2360 = 31;
++    D_800B2364 = 10;
++    D_800B2368 = 21;
++    for (int i = 0; i < TRAIL; ++i) {
++        u8 *row = D_800B14F0 + i * STRIDE;
++        set_wide(row, i % 2 ? 0x800 : 0);
++        set_word(row + 8, 704 + i);
++        set_word(row + 0x16, 92);
++        set_word(row + 0x18, 88 + i % 2);
++        row[0x44] = 1;
++    }
++    const PcPortForestCameraTiming timing = {12, 2};
++    PcPortForestCameraTiming restored_timing = {0};
++    memset(wire, 0xa5, sizeof wire);
++    assert(PcPort_ForestPartyCapture(wire, timing));
++    assert(!memcmp(wire, "F614", 4));
++    assert(wire[TIMING] == timing.step && wire[TIMING + 1] == timing.phase);
++    for (size_t i = PARTY_END; i < sizeof wire; ++i)
++        assert(wire[i] == 0);
++    assert(!PcPort_StreetFollowersCapture(bad));
++    assert_rejected(PcPort_StreetFollowersRestore, wire);
++    observe(&original);
++
++    /* The cold constructor put both characters at Fei. Its scheduler state,
++     * bindings and unrelated flags survive applying the saved companion. */
++    pose(PARTNER, 1, scene.actor[LEADER].position, 92, 88);
++    elly->scriptFlags.flags = 0x01420cb0;
++    elly->flags = 0x04011420;
++    elly->scriptInstructionPointer = 0x135;
++    elly->scripts[1].waitTimer = 41;
++    set_word(scene.sprite[PARTNER] + 0x80, 1024);
++    memset(D_800B14F0, 0, sizeof D_800B14F0);
++    for (int i = 0; i < TRAIL; ++i)
++        set_wide(D_800B14F0 + i * STRIDE, 0x4800);
++    D_800B2360 = D_800B2364 = D_800B2368 = 0;
++    D_800C3910 = 0;
++    observe(&entrance);
++    assert(PcPort_ForestPartyRestore(wire, &restored_timing));
++    assert(restored_timing.step == timing.step && restored_timing.phase == timing.phase);
++    assert_pose(PARTNER, &original);
++    assert(elly->position.vx - scene.actor[LEADER].position.vx == 1354834);
++    assert(elly->position.vz - scene.actor[LEADER].position.vz == 1354834);
++    assert(!memcmp(scene.sprite[PARTNER] + 0x80, original.sprites[PARTNER] + 0x80, 2));
++    assert(elly->scriptFlags.flags == 0x014204b0 && elly->flags == 0x04010420);
++    assert(elly->scriptInstructionPointer == entrance.actors[PARTNER].scriptInstructionPointer);
++    assert(!memcmp(elly->scripts, entrance.actors[PARTNER].scripts, sizeof elly->scripts));
++    assert(!memcmp(&scene.actor[LEADER], &entrance.actors[LEADER], sizeof scene.actor[LEADER]));
++    assert(D_800B2360 == 31 && D_800B2364 == 10 && D_800B2368 == 21 && D_800C3910 == -1);
++    assert_restored_trail(&original);
++
++    /* Each malformed payload must fail before changing pose, flags or trail. */
++    const size_t invalid[] = {0, 4, 6, HEADER + POSE - 2, HEADER + POSE - 1,
++        HEADER + POSE + (TRAIL - 1) * ROW + ROW_LAYER, CURSORS + 8, TIMING - 2, TIMING - 1,
++        PARTY_END, sizeof wire - 1};
++    for (size_t i = 0; i < sizeof invalid / sizeof invalid[0]; ++i) {
++        memcpy(bad, wire, sizeof bad);
++        bad[invalid[i]] = 0xff;
++        assert_rejected(restore_workshop_party, bad);
++    }
++    const PcPortForestCameraTiming invalid_timing[] = {{7, 0}, {9, 0}, {22, 0}, {12, 4}};
++    for (size_t i = 0; i < sizeof invalid_timing / sizeof invalid_timing[0]; ++i) {
++        memcpy(bad, wire, sizeof bad);
++        assert(!PcPort_ForestPartyCapture(bad, invalid_timing[i]));
++        assert(!memcmp(bad, wire, sizeof bad));
++        bad[TIMING] = invalid_timing[i].step;
++        bad[TIMING + 1] = invalid_timing[i].phase;
++        assert_rejected(restore_workshop_party, bad);
++    }
++    assert(!PcPort_ForestPartyRestore(wire, NULL));
++    D_8005A444[1] = 1;
++    memset(bad, 0xa5, sizeof bad);
++    assert(!PcPort_ForestPartyCapture(bad, timing));
++    for (size_t i = 0; i < sizeof bad; ++i)
++        assert(bad[i] == 0xa5);
++    assert_rejected(restore_workshop_party, wire);
++    D_8005A444[1] = PARTNER;
++    /* The follower update toggles these bits independently. Capturing a moving
++     * idle-animation follower and clearing either bit must round-trip. */
++    for (unsigned i = 0; i < 4; ++i) {
++        const u16 moving = i & 1 ? 0x800 : 0;
++        const u16 use_trail = i & 2 ? 0x1000 : 0;
++        elly->scriptFlags.flags = 0x010204b0 | moving;
++        elly->flags = 0x04010400 | use_trail;
++        PcPortForestCameraTiming sample = { (u8)(i % 2 ? 20 : 8), (u8)i };
++        assert(PcPort_ForestPartyCapture(wire, sample));
++        assert(!memcmp(wire + 4, &moving, sizeof moving) &&
++               !memcmp(wire + 6, &use_trail, sizeof use_trail));
++        elly->scriptFlags.flags ^= 0x800;
++        elly->flags ^= 0x1000;
++        assert(PcPort_ForestPartyRestore(wire, &restored_timing));
++        assert(restored_timing.step == sample.step && restored_timing.phase == sample.phase);
++        assert(elly->scriptFlags.flags == (0x010204b0u | moving));
++        assert(elly->flags == (0x04010400u | use_trail));
++    }
++}
++
+@@ -867,0 +1007,2 @@
++    workshop_party();
++    puts("PASS Disc 2 forest follower offset, trail, movement flags and atomic rejection");
+diff --git a/pc_port/tests/quick_checkpoint_forest_cases.inc b/pc_port/tests/quick_checkpoint_forest_cases.inc
+index 0a8eb9a0c1b698e8d855b06b01875825d6295dd7..ed61adf8e2b3e0e4334bab5ad359edfbb4a7dd10 100644
+--- a/pc_port/tests/quick_checkpoint_forest_cases.inc
++++ b/pc_port/tests/quick_checkpoint_forest_cases.inc
+@@ -54,0 +55,44 @@
++static void forest_controller_parked(void)
++{
++    ActorData *controller = (ActorData *)(uintptr_t)forest_fields[FOREST_OWNER].pActorData;
++    controller->scriptInstructionPointer = 0x3ae;
++    controller->scripts[0].currentIP = 0x3ae;
++    controller->scripts[0].flags_0x12 = 7;
++    g_FieldCameraMode = 0;
++    D_800B233E = g_PlayerActorIndex;
++}
++
++static void capture_forest_party_slot(PcPortQuickCheckpoint *slot)
++{
++    /* The ordinary pre-F11 view on build 09910d26. The camera was still
++     * approaching its target after Fei stopped and Elly remained behind. */
++    script_word(0, 249);
++    script_word(2, 2);
++    script_word(4, 615);
++    script_word(0x400, 0);
++    forest_controller_parked();
++    target_heading = 1536;
++    target_z = g_actor->position.vz;
++    g_Scene = (FieldScene){0};
++    g_Scene.sceneScrZ = 512;
++    g_Scene.sceneDIP = 30;
++    g_Scene.sceneScale = 4096;
++    g_Scene.sceneAngle.vy = g_Scene.unk7C = target_heading;
++    memcpy((u8*)&g_Scene + 0x60, &(s32){1536 * 65536}, sizeof(s32));
++    g_CamMovementFlags = g_CamAtMovementDuration = g_CamEyeMovementDuration = 0;
++    g_CamInterpolation.atStepDistance = g_CamInterpolation.eyeStepDistance = 12;
++    D_800ADBAC = 22;
++    D_800ADBA8 = D_800B21CD = D_800B21D8 = 0;
++    g_CameraEye = (VECTOR){84926126, -57353162, -55060868, 0};
++    g_CameraAt = (VECTOR){45349202, -25652280, -12069379, 0};
++    g_CameraEye2 = target_eye = (VECTOR){87258798, -59899904, -55758674, 0};
++    g_CameraAt2 = target_at = (VECTOR){46158766, -26345472, -14658642, 0};
++    test_forest_party_capture = 1;
++    PcPort_QuickCheckpointRequestSave();
++    require(!PcPort_QuickCheckpointPoll() && PcPort_QuickCheckpointGetUiState() == PC_PORT_QUICK_UI_SAVE_OK &&
++            !PcPort_QuickCheckpointReadFile(g_path, slot), "earned forest F11 capture");
++    test_forest_party_capture = 0;
++    require(slot->field_actor_kind == PC_PORT_QUICK_ACTORS_FOLLOW_CAMERA && slot->has_party_followers &&
++            !memcmp(slot->party_followers, "F614", 4), "forest F11 omitted the camera or party record");
++}
++
+@@ -153,0 +198,40 @@
++        /* The typed sidecar participates in the real save tuple. Its decoder
++         * runs once after Fei is placed. A rejected payload takes the same
++         * authored regroup as an older save which never recorded Elly. */
++        capture_forest_party_slot(&with_camera);
++        const VECTOR saved_eye = g_CameraEye, saved_at = g_CameraAt;
++        for (int damaged = 0; damaged < 2; ++damaged) {
++            if (damaged) with_camera.party_followers[0] ^= 1;
++            load_fixture(&with_camera);
++            forest_constructor();
++            forest_scripts_ready(FOREST_SCRIPT_SIZE, 1, "typed forest handback failed");
++            unsigned groups = forest_regroups, restores = forest_party_restores;
++            ActorData *elly = (ActorData *)(uintptr_t)forest_fields[2].pActorData;
++            g_FieldCameraMode = 2;
++            elly->position.vz = 47;
++            PcPort_QuickCheckpointRestorePlayer();
++            require(!g_actor->position.vx && elly->position.vz == 47 &&
++                    forest_party_restores == restores && forest_regroups == groups,
++                    "typed pose applied while the forest handback still owned the camera");
++            forest_controller_parked();
++            g_FieldCameraMode = 2;
++            require(!PcPort_QuickCheckpointPoll() && !g_actor->position.vx &&
++                    elly->position.vz == 47 && forest_party_restores == restores,
++                    "parked forest controller applied the pose before camera handback");
++            g_FieldCameraMode = 0;
++            g_CameraEye = g_CameraEye2 = (VECTOR){300 * 65536, -100 * 65536, -400 * 65536, 0};
++            g_CameraAt = g_CameraAt2 = (VECTOR){250 * 65536, -100 * 65536, -450 * 65536, 0};
++            g_CamInterpolation.atStepDistance = g_CamInterpolation.eyeStepDistance = 8;
++            D_800ADBAC = 17;
++            require(!PcPort_QuickCheckpointPoll() && forest_party_restores == restores + 1,
++                    "ordinary forest poll did not retry the pending F12");
++            PcPort_QuickCheckpointRestorePlayer();
++            if (!damaged)
++                require(g_CamInterpolation.atStepDistance == 12 && g_CamInterpolation.eyeStepDistance == 12 &&
++                        D_800ADBAC == 18 && same_xyz(&g_CameraEye, &saved_eye) && same_xyz(&g_CameraAt, &saved_at) &&
++                        same_xyz(&g_CameraEye2, &target_eye) && same_xyz(&g_CameraAt2, &target_at),
++                        "forest F12 lost the saved follow timing, rendered view or targets");
++            require(forest_party_restores == restores + 1, "typed forest party did not restore once");
++            require(forest_regroups == groups + (unsigned)damaged,
++                    "typed forest party chose the wrong regroup behavior");
++        }
+@@ -157 +241 @@
+-        puts("QUICK GATE Disc 2 forest handback, party, regroup and ordinary entry: PASS");
++        puts("QUICK GATE Disc 2 forest typed F11/F12, camera timing, legacy regroup and ordinary entry: PASS");
+diff --git a/pc_port/tests/quick_checkpoint_gate_test.c b/pc_port/tests/quick_checkpoint_gate_test.c
+index 38c15087b491f9d32451a811b7946cbadea6650d..811f34da7f72915abd1d542c9e8fcbea09781805 100644
+--- a/pc_port/tests/quick_checkpoint_gate_test.c
++++ b/pc_port/tests/quick_checkpoint_gate_test.c
+@@ -154 +154,2 @@
+-    require(g_GameSceneMapNum == 102 && distance == 512, "unexpected checkpoint projection");
++    require((g_GameSceneMapNum == 102 || g_GameSceneMapNum == 614) && distance == 512,
++            "unexpected checkpoint projection");
+@@ -156 +157 @@
+-s32 D_800B21D8, D_800ADBA8;
++s32 D_800B21D8, D_800ADBA8, D_800ADBAC;
+@@ -211,0 +213,21 @@
++static unsigned forest_party_restores;
++static int test_forest_party_capture;
++int PcPort_ForestPartyCapture(uint8_t out[PC_PORT_QUICK_PARTY_BYTES], PcPortForestCameraTiming timing)
++{
++    if (!test_forest_party_capture)
++        return 0;
++    require(g_GameSceneMapNum == 614 && timing.step == 12 && timing.phase == 2,
++            "forest F11 passed the wrong follow timing to the party codec");
++    memcpy(out, "F614", 4);
++    return 1;
++}
++int PcPort_ForestPartyRestore(const uint8_t in[PC_PORT_QUICK_PARTY_BYTES], PcPortForestCameraTiming *timing)
++{
++    require(g_GameSceneMapNum == 614 && g_actor->position.vx == 46158766 &&
++            g_actor->position.vz == -14658642, "forest party restored before Fei");
++    ++forest_party_restores;
++    if (memcmp(in, "F614", 4))
++        return 0;
++    *timing = (PcPortForestCameraTiming){12, 2};
++    return 1;
++}
+diff --git a/pc_port/tests/quick_checkpoint_restore_test.c b/pc_port/tests/quick_checkpoint_restore_test.c
+index 7836c3b59319c4c6b1141093b7054335702eebda..a20a0516f385a211d5352fc22b59c58813d87baf 100644
+--- a/pc_port/tests/quick_checkpoint_restore_test.c
++++ b/pc_port/tests/quick_checkpoint_restore_test.c
+@@ -9 +9 @@
+-#include "quick_checkpoint_file.h"
++#include "quick_checkpoint_cave_actors.h"
+@@ -41,2 +41,3 @@
+-static int forest_handback_finished(void) { abort(); }
+-static int PcPort_ForestRegroupAtPlayer(void) { abort(); }
++static int forest_controller_parked(int require_control) { (void)require_control; abort(); }
++int PcPort_ForestRegroupAtPlayer(void) { abort(); }
++static s16 g_FieldCameraMode;
+@@ -94 +95 @@
+-static int restore_field_follow_camera(const uint8_t in[128])
++static int restore_field_follow_camera(const uint8_t in[128], const PcPortForestCameraTiming *timing)
+@@ -96,0 +98 @@
++    (void)timing;
+@@ -102 +104 @@
+-static int PcPort_CaveActorsRestore(const uint8_t in[PC_PORT_QUICK_CAVE_BYTES])
++int PcPort_CaveActorsRestore(const uint8_t in[PC_PORT_QUICK_CAVE_BYTES])
+@@ -107 +109 @@
+-static int PcPort_FollowerRestore(const uint8_t in[PC_PORT_QUICK_CAVE_BYTES])
++int PcPort_FollowerRestore(const uint8_t in[PC_PORT_QUICK_CAVE_BYTES])
+@@ -117 +119 @@
+-static int PcPort_FollowerGroupAtPlayer(void)
++int PcPort_FollowerGroupAtPlayer(void)
+@@ -123 +125 @@
+-static int PcPort_BalActorRestore(const uint8_t in[PC_PORT_QUICK_CAVE_BYTES])
++int PcPort_BalActorRestore(const uint8_t in[PC_PORT_QUICK_CAVE_BYTES])
+@@ -136 +138,8 @@
+-static int PcPort_StreetFollowersRestore(const uint8_t in[PC_PORT_QUICK_PARTY_BYTES])
++int PcPort_ForestPartyRestore(const uint8_t in[PC_PORT_QUICK_PARTY_BYTES], PcPortForestCameraTiming *timing)
++{
++    (void)in;
++    (void)timing;
++    abort(); /* These ordinary contact-only slots never enter field 614. */
++}
++
++int PcPort_StreetFollowersRestore(const uint8_t in[PC_PORT_QUICK_PARTY_BYTES])
+@@ -142 +151 @@
+-static int PcPort_StreetFollowersRegroup(void)
++int PcPort_StreetFollowersRegroup(void)
+diff --git a/pc_port/tests/run_quick_checkpoint_cave_actors_test.sh b/pc_port/tests/run_quick_checkpoint_cave_actors_test.sh
+index 1ac729f2cab8b3e9bf4d9f91695eae6325decf5b..08ec78a059c4bc6f4cec2e2e16e89e68027fc555 100755
+--- a/pc_port/tests/run_quick_checkpoint_cave_actors_test.sh
++++ b/pc_port/tests/run_quick_checkpoint_cave_actors_test.sh
+@@ -17 +17 @@
+-        -Ipc_port/include_shim -Ipc_port/src -Iinclude -I"$sdk/include/psx" -I"$sdk/include" \
++        -Ipc_port/include_shim -I"$(dirname "$source_file")" -Ipc_port/src -Iinclude -I"$sdk/include/psx" -I"$sdk/include" \
+diff --git a/pc_port/tests/run_quick_checkpoint_gate_test.sh b/pc_port/tests/run_quick_checkpoint_gate_test.sh
+index 11ef8976ea3f3cc35e25f60524719e82d437b1dc..28dcc85cc92d28b0ad2c8b8c4c85b75b64cbd857 100755
+--- a/pc_port/tests/run_quick_checkpoint_gate_test.sh
++++ b/pc_port/tests/run_quick_checkpoint_gate_test.sh
+@@ -26,0 +27 @@
++checkpoint_source=${XENO_CHECKPOINT_TEST_SOURCE:-pc_port/src/quick_checkpoint.c}
+@@ -33 +34 @@
+-    -Ipc_port/include_shim -Ipc_port/extern/PsyCross/include/psx \
++    -I"$(dirname "$checkpoint_source")" -Ipc_port/include_shim -Ipc_port/extern/PsyCross/include/psx \
+@@ -36 +37 @@
+-    "${XENO_CHECKPOINT_TEST_SOURCE:-pc_port/src/quick_checkpoint.c}" \
++    "$checkpoint_source" \
