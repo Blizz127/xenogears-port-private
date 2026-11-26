@@ -1,0 +1,1 @@
+            PcPort_VerifyBattleBootDisc();
