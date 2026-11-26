@@ -1,0 +1,1 @@
+int PcPort_RoboMenuSupportsSellCategory(PcRoboMenuImage *program)

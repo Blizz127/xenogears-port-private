@@ -1,0 +1,438 @@
+{
+  "format": 1,
+  "files": {
+    "pc_port/src/robo_menu_buy_category_return.c": {
+      "before": {
+        "mode": "100644",
+        "blob": "df58f23a04b0a2642c8fb9ea59ef3af075f06673",
+        "size": 13652,
+        "sha256": "f44e72b124384813c8d6595fac5c8ac85d5fe38c3b60b38b8a8ff8e7843d09be"
+      },
+      "after": {
+        "mode": "100644",
+        "blob": "16a342273cec88926f3279d151c56d5ba8dd153c",
+        "size": 13655,
+        "sha256": "8822686dee0b96ed3c9890e7afb23e89778db4e02f9cbb2ff16ad67607065a2c"
+      },
+      "added_sha256": "0b02b7b535f9f53badd1561adfa7ea130a06a9156d2d621633f96cb464b5d85d",
+      "spans": [
+        [
+          "base",
+          0,
+          2381
+        ],
+        [
+          "added",
+          0,
+          79
+        ],
+        [
+          "base",
+          2457,
+          11195
+        ]
+      ]
+    },
+    "pc_port/src/robo_menu_mesh.c": {
+      "before": {
+        "mode": "100644",
+        "blob": "24c0d09b658d1af38499c02027be76d1a32094a6",
+        "size": 88177,
+        "sha256": "40d6c671238d425312a76ae05ee3c79224f3d761376a6d25f90c861b950e7686"
+      },
+      "after": {
+        "mode": "100644",
+        "blob": "0124aaa5ef5b0697e75b99e59583387c0e2bccd1",
+        "size": 88324,
+        "sha256": "0e5447b3826e1dc30b2348cd28cd4f1d34195e7c21ab4d76e9e0b76da2cc1959"
+      },
+      "added_sha256": "fe7f43bcb33fd03a1eb01c0cf61f879916da606e145e6b60488a88209899578c",
+      "spans": [
+        [
+          "base",
+          0,
+          1290
+        ],
+        [
+          "added",
+          0,
+          27
+        ],
+        [
+          "base",
+          1290,
+          34612
+        ],
+        [
+          "added",
+          27,
+          245
+        ],
+        [
+          "base",
+          36046,
+          51
+        ],
+        [
+          "added",
+          272,
+          97
+        ],
+        [
+          "base",
+          36175,
+          52002
+        ]
+      ]
+    },
+    "pc_port/src/robo_menu_purchase.c": {
+      "before": {
+        "mode": "100644",
+        "blob": "9a62904dbdfa1bfc5ed97f38994aa14debe71b50",
+        "size": 11759,
+        "sha256": "adc8403a33c432fd5aa0b2bdc5da886bb14d823fc6857e08dce5b94ab764c1b2"
+      },
+      "after": {
+        "mode": "100644",
+        "blob": "f353ae9a30639960cad386b928fcb8a73bf2402e",
+        "size": 12031,
+        "sha256": "961134b1b78052452b6d6de2daba61a0fa751e527415a0f8fd11422b631e0972"
+      },
+      "added_sha256": "286ed8d279e8eb1d2d2e915466e682f51dbe618952ead6e003c85902218cbc4b",
+      "spans": [
+        [
+          "base",
+          0,
+          482
+        ],
+        [
+          "added",
+          0,
+          41
+        ],
+        [
+          "base",
+          482,
+          5248
+        ],
+        [
+          "added",
+          41,
+          66
+        ],
+        [
+          "base",
+          5793,
+          28
+        ],
+        [
+          "added",
+          107,
+          352
+        ],
+        [
+          "base",
+          5945,
+          5814
+        ]
+      ]
+    },
+    "pc_port/src/robo_menu_purchase.h": {
+      "before": {
+        "mode": "100644",
+        "blob": "0ff6437a784ac0f74db54bb8ae0b74bc8f170ac7",
+        "size": 2633,
+        "sha256": "aa1127ade34fb15bdc63e64b0577f6c902d0936fa136df917aa46a11b52d915d"
+      },
+      "after": {
+        "mode": "100644",
+        "blob": "c922c9c9cc4fc738256494547e7e875dc3e05481",
+        "size": 2661,
+        "sha256": "c3ce1f259de0f3e524f5ebaea487787897a2ed0a81e7bbfdadfeed4e1bc1713b"
+      },
+      "added_sha256": "c725ddedcf69061215716bdef13b90b793df0f21a2cb4817c01175b9c338afb6",
+      "spans": [
+        [
+          "base",
+          0,
+          822
+        ],
+        [
+          "added",
+          0,
+          160
+        ],
+        [
+          "base",
+          954,
+          1679
+        ]
+      ]
+    },
+    "pc_port/src/robo_menu_return_foreground.c": {
+      "before": {
+        "mode": "100644",
+        "blob": "bbd558dca95d8e3c251bb3d33c876f72eff726e6",
+        "size": 22436,
+        "sha256": "273f7579c6d17ab57eed29f723d1d7e120cb46b696c6f247a120b172ce927854"
+      },
+      "after": {
+        "mode": "100644",
+        "blob": "99b54a41c229e7eb0e58cc23739b7b86b62b2e26",
+        "size": 22468,
+        "sha256": "40327995916b808485d01da2dc0342a129c7ecc5d1f9eb30c367cabcda477891"
+      },
+      "added_sha256": "32bdf7e74679567c67d584368291523c40117b8038e5ae6c2a7001592f853d17",
+      "spans": [
+        [
+          "base",
+          0,
+          5155
+        ],
+        [
+          "added",
+          0,
+          144
+        ],
+        [
+          "base",
+          5267,
+          17169
+        ]
+      ]
+    },
+    "pc_port/src/robo_menu_root_links.c": {
+      "before": {
+        "mode": "100644",
+        "blob": "fbb8d04f9f6ebde0503801a54c394c5957c9985b",
+        "size": 40361,
+        "sha256": "e391423bbb218d2f30d6b3a056f985c5dcc3d4339d889556c7191cb2cb4a49e5"
+      },
+      "after": {
+        "mode": "100644",
+        "blob": "cc02925a1399bd1bb6492e9e7971cbe9c918cdd6",
+        "size": 40367,
+        "sha256": "51b14009312c9ece510662847741565f5012d4e96c7003b5ecd14fcc710ca277"
+      },
+      "added_sha256": "6588820d50f9574b97d16ce50558831e0802e96546441185ae47010247926991",
+      "spans": [
+        [
+          "base",
+          0,
+          9250
+        ],
+        [
+          "added",
+          0,
+          95
+        ],
+        [
+          "base",
+          9342,
+          13955
+        ],
+        [
+          "added",
+          95,
+          110
+        ],
+        [
+          "base",
+          23404,
+          16957
+        ]
+      ]
+    },
+    "pc_port/src/robo_menu_root_stock_wait.c": {
+      "before": {
+        "mode": "100644",
+        "blob": "3f797daf0ded9f291bf405a41078082c42af592a",
+        "size": 24282,
+        "sha256": "be19e46c0d230f75330a48945781fd3435f3818b018dae7729e317f688f5cc16"
+      },
+      "after": {
+        "mode": "100644",
+        "blob": "2a0fbba072bb6f5c1b7368a25122a3d674b3832e",
+        "size": 24288,
+        "sha256": "99dba16743814ff95555388d1d5195a7729474a9ceb0580bc5b5133d424130fa"
+      },
+      "added_sha256": "a03b98040a0e995823674aa41a1fdc0f158eae13d2882f8d6afeeb6ca9232ebe",
+      "spans": [
+        [
+          "base",
+          0,
+          10469
+        ],
+        [
+          "added",
+          0,
+          88
+        ],
+        [
+          "base",
+          10554,
+          729
+        ],
+        [
+          "added",
+          88,
+          90
+        ],
+        [
+          "base",
+          11370,
+          12912
+        ]
+      ]
+    },
+    "pc_port/src/robo_menu_root_ui.c": {
+      "before": {
+        "mode": "100644",
+        "blob": "d32d75a3802703dd69fb4ea86652920d01b86804",
+        "size": 82611,
+        "sha256": "c271f766c520aa2f2d8e7f1f936292e5ce8715168623f961c3e3a78bda7473fa"
+      },
+      "after": {
+        "mode": "100644",
+        "blob": "7e7e77dbb189101953d0afc7425b8c595cdd957f",
+        "size": 82614,
+        "sha256": "e8ccd15cd9ee5e0a140f8066fdf4e63dd7d161222667e044487dd3badef8789c"
+      },
+      "added_sha256": "78ff3bf83e98e4c2182bcd4d1a4c70b52d0a836bf513b61640da44d6c87ebcdf",
+      "spans": [
+        [
+          "base",
+          0,
+          37735
+        ],
+        [
+          "added",
+          0,
+          75
+        ],
+        [
+          "base",
+          37807,
+          44804
+        ]
+      ]
+    },
+    "pc_port/tests/robo_stock_cursor_predecessor_test.c": {
+      "before": {
+        "mode": "100644",
+        "blob": "5ef75f1d3bd5d453ab70bb2d48811a0dfd33f73d",
+        "size": 10719,
+        "sha256": "037f2570e8a0a846c70007f770f84ffed21b03d280096df88fbe5f90691b8c16"
+      },
+      "after": {
+        "mode": "100644",
+        "blob": "e5974be552b1fad040c4e468fe05ff87b8100736",
+        "size": 10722,
+        "sha256": "a147b9b44f481effb29a3eaf6ccb3ad2e771c101a50b6c76f8df2aab0e002bd0"
+      },
+      "added_sha256": "eeedf1abc036c58d946e97a5e9556cbed1f8b16ca41759f6ceb49da861602937",
+      "spans": [
+        [
+          "base",
+          0,
+          897
+        ],
+        [
+          "added",
+          0,
+          66
+        ],
+        [
+          "base",
+          960,
+          9759
+        ]
+      ]
+    },
+    "pc_port/tests/robo_ygg_sell_category_test.c": {
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "blob": "2acc797bbe6aaabf035eabc3d6c00379b3acfc53",
+        "size": 7185,
+        "sha256": "b663901829dde8972374ef762757f9290d6356eed6ed49983758ae05ef4b169d"
+      },
+      "added_sha256": "b663901829dde8972374ef762757f9290d6356eed6ed49983758ae05ef4b169d",
+      "spans": [
+        [
+          "added",
+          0,
+          7185
+        ]
+      ]
+    },
+    "pc_port/tests/robo_ygg_sell_yaw_oracle.c": {
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "blob": "ab76574831ed1eadb685af0558cadcac474b1fc5",
+        "size": 2874,
+        "sha256": "7d791952536310a13f5b57cbdafb438533c729032d1ae2182158e1619aef4c52"
+      },
+      "added_sha256": "7d791952536310a13f5b57cbdafb438533c729032d1ae2182158e1619aef4c52",
+      "spans": [
+        [
+          "added",
+          0,
+          2874
+        ]
+      ]
+    },
+    "pc_port/tests/robo_ygg_sell_yaw_test.c": {
+      "before": null,
+      "after": {
+        "mode": "100644",
+        "blob": "96ebe71b6f55e28e4734bffebdb53854fe59a67e",
+        "size": 5461,
+        "sha256": "b48c4263c4df13ac32c9eaf3473ee4e69b4e11340c67f3160580f5476a21fb96"
+      },
+      "added_sha256": "b48c4263c4df13ac32c9eaf3473ee4e69b4e11340c67f3160580f5476a21fb96",
+      "spans": [
+        [
+          "added",
+          0,
+          5461
+        ]
+      ]
+    },
+    "pc_port/tests/run_robo_ygg_sell_category_test.sh": {
+      "before": null,
+      "after": {
+        "mode": "100755",
+        "blob": "2b37cfaadbafb2c27c188971bf9b6858a30d79c1",
+        "size": 1477,
+        "sha256": "0bafc6c2f7205c816e9d6da7c2ddc9475c057cccdaa24102c7b62e7352b02891"
+      },
+      "added_sha256": "0bafc6c2f7205c816e9d6da7c2ddc9475c057cccdaa24102c7b62e7352b02891",
+      "spans": [
+        [
+          "added",
+          0,
+          1477
+        ]
+      ]
+    },
+    "pc_port/tests/run_robo_ygg_sell_yaw_test.sh": {
+      "before": null,
+      "after": {
+        "mode": "100755",
+        "blob": "7242c71b52e0995a5a0d0197ac99e4849915be0f",
+        "size": 2388,
+        "sha256": "42b7344ab64f867af90e0d361d6382f09ea66318100dcd106ed0b96fa4e687b3"
+      },
+      "added_sha256": "42b7344ab64f867af90e0d361d6382f09ea66318100dcd106ed0b96fa4e687b3",
+      "spans": [
+        [
+          "added",
+          0,
+          2388
+        ]
+      ]
+    }
+  }
+}
