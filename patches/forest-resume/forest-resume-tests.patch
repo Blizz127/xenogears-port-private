@@ -1,0 +1,187 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Xenogears Port <port@xenogears.invalid>
+Date: Thu, 26 Nov 2026 03:14:07 +0000
+Subject: [PATCH] Cover forest checkpoint resume and refusal boundaries
+
+
+diff --git a/pc_port/tests/quick_checkpoint_forest_cases.inc b/pc_port/tests/quick_checkpoint_forest_cases.inc
+new file mode 100644
+index 0000000000000000000000000000000000000000..cdc1870eeb445d7f58cb67c5f69cca1f4e080d17
+--- /dev/null
++++ b/pc_port/tests/quick_checkpoint_forest_cases.inc
+@@ -0,0 +1,167 @@
++/* The optional original script is supplied outside the source tree. Only its
++ * field identity and the observed scheduler boundary belong in this fixture. */
++enum { FOREST_ACTOR_COUNT = 17, FOREST_SCRIPT_SIZE = 3608, FOREST_OWNER = 12 };
++static FieldActor forest_fields[FOREST_ACTOR_COUNT];
++static _Alignas(8) u8 forest_script[FOREST_SCRIPT_SIZE];
++static unsigned forest_regroups;
++
++static void forest_constructor(void)
++{
++    ActorData *actors = g_actor_mapping;
++    memset(actors, 0, 3 * sizeof *actors);
++    memset(forest_fields, 0, sizeof forest_fields);
++    g_FieldActors = forest_fields;
++    D_800ADBFC = FOREST_ACTOR_COUNT;
++    g_PlayerActorIndex = 1;
++    g_GameSceneMapNum = 614;
++    g_FieldCurScriptFile = (ScriptsFile *)forest_script;
++    g_FieldScriptVMCurScriptData = forest_script + 0x84 + FOREST_ACTOR_COUNT * 64;
++    script_word(2, 2);
++    const unsigned ids[] = {1, 2, FOREST_OWNER};
++    for (unsigned i = 0; i < 3; ++i) {
++        forest_fields[ids[i]].pActorData = (u32)(uintptr_t)&actors[i];
++        /* Distinct values make edits to either party member observable. */
++        actors[i].scriptInstructionPointer = (u16)(0x50 + i);
++        actors[i].scripts[0].currentIP = (u16)(0x90 + i);
++        actors[i].scripts[0].flags_0x12 = 0xf;
++    }
++}
++
++static void forest_scripts_ready(unsigned bytes, int resume, const char *reason)
++{
++    ActorData *actors = g_actor_mapping;
++    ActorData before[3];
++    memcpy(before, actors, sizeof before);
++    PcPort_QuickCheckpointFieldScriptsReady(bytes);
++    if (resume) {
++        before[2].scriptInstructionPointer = 0x39a;
++        before[2].scripts[0].currentIP = 0x39a;
++        before[2].scripts[0].flags_0x12 = 7;
++    }
++    require(!memcmp(before, actors, sizeof before), reason);
++}
++
++static void forest_regroup(void)
++{
++    ActorData *actors = g_actor_mapping;
++    require(D_800AFD1C == FOREST_OWNER && g_FieldScriptVMCurActor == &actors[2] &&
++            g_FieldScriptVMCurActor->scriptInstructionPointer == 0x3a0,
++            "forest regroup ran outside the controller's handback instruction");
++    require(actors[0].position.vx == 46158766 && actors[0].position.vz == -14658642,
++            "forest regroup ran before saved player placement");
++    ++forest_regroups;
++}
++
++static void test_forest_handback(void)
++{
++    reset_case();
++    mounted_disc = 2;
++    PcPortQuickCheckpoint old = { .on_disc2 = 1, .map = 614, .entrance = 2,
++        .position = {46158766, -24248320, -14658642} };
++    camera_game_word(&old, 0x1930, 249);
++    camera_game_word(&old, 0x1932, 2);
++    camera_game_word(&old, 0x1934, 615);
++    memcpy(old.game_state + 0x1d34, (u8[]){0, 1, 0xff}, 3);
++
++    /* A correctly shaped synthetic file must fail the original script hash. */
++    ((ScriptsFile *)forest_script)->numScripts = FOREST_ACTOR_COUNT;
++    load_fixture(&old);
++    require(PcPort_QuickCheckpointHoldFieldPresentation(),
++            "earned forest checkpoint without camera, actor or walkmesh hint was overlooked");
++    forest_constructor();
++    forest_scripts_ready(FOREST_SCRIPT_SIZE, 0, "synthetic script resumed the forest scene");
++
++    const char *path = getenv("XENO_QUICK_TEST_FOREST_SCRIPT");
++    if (path) {
++        FILE *f = fopen(path, "rb");
++        require(f && fread(forest_script, 1, sizeof forest_script, f) == sizeof forest_script &&
++                fgetc(f) == EOF && !ferror(f) && fclose(f) == 0, "read supplied field 614 script");
++    }
++    static const char *const reasons[] = {
++        "wrong saved disc", "wrong saved field", "wrong saved entry", "wrong story",
++        "wrong script entry", "wrong prior field", "wrong companion", "wrong actor record"
++    };
++    for (unsigned i = 0; i < sizeof reasons / sizeof reasons[0]; ++i) {
++        PcPortQuickCheckpoint other = old;
++        switch (i) {
++        case 0: other.on_disc2 = 0; break;
++        case 1: other.map = 613; break;
++        case 2: other.entrance = 1; break;
++        case 3: camera_game_word(&other, 0x1930, 250); break;
++        case 4: camera_game_word(&other, 0x1932, 1); break;
++        case 5: camera_game_word(&other, 0x1934, 613); break;
++        case 6: other.game_state[0x1d35] = 0xff; break;
++        case 7: other.field_actor_kind = PC_PORT_QUICK_ACTORS_TANK_ROOM; break;
++        }
++        mounted_disc = other.on_disc2 ? 2 : 1;
++        load_fixture(&other);
++        require(!PcPort_QuickCheckpointHoldFieldPresentation(), reasons[i]);
++        mounted_disc = 2;
++        forest_constructor();
++        forest_scripts_ready(FOREST_SCRIPT_SIZE, 0, reasons[i]);
++    }
++
++    load_fixture(&old);
++    char actors_path[1024];
++    require(snprintf(actors_path, sizeof actors_path, "%s.actors", g_path) < (int)sizeof actors_path,
++            "forest actor companion path");
++    FILE *damaged = fopen(actors_path, "wb");
++    require(damaged && fputs("BAD", damaged) >= 0 && fclose(damaged) == 0, "invalid forest companion fixture");
++    load_fixture_slot();
++    require(!PcPort_QuickCheckpointHoldFieldPresentation(),
++            "rejected forest actor record treated as an absent legacy record");
++    forest_constructor();
++    forest_scripts_ready(FOREST_SCRIPT_SIZE, 0, "rejected forest record resumed the scene");
++
++    if (path) {
++        load_fixture(&old);
++        forest_constructor();
++        forest_scripts_ready(FOREST_SCRIPT_SIZE - 1, 0, "short forest script resumed the scene");
++        forest_script[0] ^= 1;
++        forest_scripts_ready(FOREST_SCRIPT_SIZE, 0, "altered forest script resumed the scene");
++        forest_script[0] ^= 1;
++        forest_fields[2].pActorData = 0;
++        forest_scripts_ready(FOREST_SCRIPT_SIZE, 0, "missing Elly caused partial forest handback");
++        PcPortQuickCheckpoint with_camera = old;
++        with_camera.field_actor_kind = PC_PORT_QUICK_ACTORS_FOLLOW_CAMERA;
++        with_camera.has_walkmesh = 1;
++        with_camera.walkmesh_triangle = 88;
++        load_fixture(&with_camera);
++        forest_constructor();
++        forest_scripts_ready(FOREST_SCRIPT_SIZE, 1, "forest save with follow-camera companion failed");
++
++        load_fixture(&old);
++        forest_constructor();
++        forest_scripts_ready(FOREST_SCRIPT_SIZE, 1, "legacy forest handback or party scheduler mismatch");
++
++        unsigned opcode = ((const u8 *)g_FieldScriptVMCurScriptData)[0x3a0];
++        void (*previous)(void) = g_FieldScriptVMHandlers[opcode];
++        g_FieldScriptVMHandlers[opcode] = forest_regroup;
++        D_800AFB54 = 1;
++        memset(&g_Scene, 0, sizeof g_Scene);
++        g_FieldCameraMode = 0;
++        D_800B233E = g_PlayerActorIndex;
++        g_Scene.sceneAngle.vy = target_heading = 1024;
++        target_z = old.position[2];
++        target_calls = matrix_calls = 0;
++        PcPort_QuickCheckpointRestorePlayer();
++        PcPort_QuickCheckpointRestorePlayer();
++        require(forest_regroups == 1, "forest party regroup must run exactly once");
++        require(target_calls == 1 && matrix_calls == 1, "forest follow camera missed saved coordinates");
++        g_FieldScriptVMHandlers[opcode] = previous;
++        forest_constructor();
++        forest_scripts_ready(FOREST_SCRIPT_SIZE, 0, "ordinary forest entry skipped the dialogue");
++
++        puts("QUICK GATE Disc 2 forest handback, party, regroup and ordinary entry: PASS");
++    } else {
++        puts("QUICK GATE original forest handback not run (set XENO_QUICK_TEST_FOREST_SCRIPT)");
++    }
++    D_800AFB54 = 1;
++    PcPort_QuickCheckpointRestorePlayer();
++    g_FieldCurScriptFile = &test_script_file;
++    g_FieldScriptVMCurScriptData = test_music_script;
++    D_800AFB54 = 2;
++    mounted_disc = 1;
++    reset_case();
++    puts("QUICK GATE forest save identity, rejected companion and synthetic script negatives: PASS");
++}
+diff --git a/pc_port/tests/quick_checkpoint_gate_test.c b/pc_port/tests/quick_checkpoint_gate_test.c
+index 4e97e3e15cde451af4b019d5c6aed4fd7200c3e6..38c15087b491f9d32451a811b7946cbadea6650d 100644
+--- a/pc_port/tests/quick_checkpoint_gate_test.c
++++ b/pc_port/tests/quick_checkpoint_gate_test.c
+@@ -1582,0 +1583 @@
++#include "quick_checkpoint_forest_cases.inc"
+@@ -1869,0 +1871 @@
++    test_forest_handback();
