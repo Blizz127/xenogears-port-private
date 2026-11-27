@@ -1,0 +1,241 @@
+{
+  "format": 1,
+  "files": {
+    "pc_port/tests/newgame_name_tail_test.c": {
+      "before": {
+        "mode": "100644",
+        "blob": "895530f9533028175520eddf3f826a57b86d0922",
+        "size": 17147,
+        "sha256": "b753c9183335c0a827860991afa3e68cf701dee233cf8831d71c53799cae6cd9"
+      },
+      "after": {
+        "mode": "100644",
+        "blob": "eaeefd25b788f3deccf4fec0cfe9936a699c28c0",
+        "size": 17827,
+        "sha256": "ce25b1c9ab64d44caf274194a8091a961441e3548d998bd33ecf069cd6ed639f"
+      },
+      "added_sha256": "ccf8768108351273e02dd210e20b291098c2ccd3b415345dd58b925541fedc49",
+      "spans": [
+        [
+          "base",
+          0,
+          342
+        ],
+        [
+          "added",
+          0,
+          24
+        ],
+        [
+          "base",
+          342,
+          498
+        ],
+        [
+          "added",
+          24,
+          244
+        ],
+        [
+          "base",
+          1075,
+          56
+        ],
+        [
+          "added",
+          268,
+          106
+        ],
+        [
+          "base",
+          1190,
+          69
+        ],
+        [
+          "added",
+          374,
+          162
+        ],
+        [
+          "base",
+          1354,
+          121
+        ],
+        [
+          "added",
+          536,
+          45
+        ],
+        [
+          "base",
+          1475,
+          6732
+        ],
+        [
+          "added",
+          581,
+          154
+        ],
+        [
+          "base",
+          8207,
+          2264
+        ],
+        [
+          "added",
+          735,
+          60
+        ],
+        [
+          "base",
+          10471,
+          1165
+        ],
+        [
+          "added",
+          795,
+          70
+        ],
+        [
+          "base",
+          11706,
+          50
+        ],
+        [
+          "added",
+          865,
+          185
+        ],
+        [
+          "base",
+          11756,
+          3633
+        ],
+        [
+          "added",
+          1050,
+          148
+        ],
+        [
+          "base",
+          15448,
+          1699
+        ]
+      ]
+    },
+    "pc_port/tests/run_newgame_name_tail_test.py": {
+      "before": {
+        "mode": "100644",
+        "blob": "631a536d59fc5b23690a6fc8d38988af10bf80e0",
+        "size": 10252,
+        "sha256": "c286e12955d070c4df4e5aa4c4302fe26ee1a6e8461d27702fe1b44d83d0236a"
+      },
+      "after": {
+        "mode": "100644",
+        "blob": "105ae726abbcde8b2aa5bc3f831d482c1301b536",
+        "size": 10541,
+        "sha256": "faf23c48f83ea31c0ec6e1aeecab164597d4b2d726dc1f33536b6e3f95c16381"
+      },
+      "added_sha256": "3f4898ff5b51298260d1027eb006e3c95b264c8f5690cf31b88042fbc73594fc",
+      "spans": [
+        [
+          "base",
+          0,
+          8386
+        ],
+        [
+          "added",
+          0,
+          77
+        ],
+        [
+          "base",
+          8528,
+          157
+        ],
+        [
+          "added",
+          77,
+          102
+        ],
+        [
+          "base",
+          8685,
+          12
+        ],
+        [
+          "added",
+          179,
+          100
+        ],
+        [
+          "base",
+          8697,
+          960
+        ],
+        [
+          "added",
+          279,
+          250
+        ],
+        [
+          "base",
+          9755,
+          497
+        ]
+      ]
+    },
+    "src/slus_006.64/system/temp3.c": {
+      "before": {
+        "mode": "100644",
+        "blob": "2465b5fc12abf9087c98959dc33e1491b0779f15",
+        "size": 32155,
+        "sha256": "3e213db443b0358f603b6c212a2b322a9105b8ff31c38475601a9034c1ae75b3"
+      },
+      "after": {
+        "mode": "100644",
+        "blob": "2ffa4d3132231a44fbe09d0eabf7a0bebd3e6fc7",
+        "size": 32183,
+        "sha256": "4988354dc6d45a33928d3bfadf13e9228100893eb11a847eb0f27435b3951fd8"
+      },
+      "added_sha256": "51b90d0555ac90b180bbea1249e050d22ea42040c4b95da4b2aa449a055a0cd7",
+      "spans": [
+        [
+          "base",
+          0,
+          24013
+        ],
+        [
+          "added",
+          0,
+          179
+        ],
+        [
+          "base",
+          24570,
+          2056
+        ],
+        [
+          "added",
+          179,
+          399
+        ],
+        [
+          "base",
+          26626,
+          172
+        ],
+        [
+          "added",
+          578,
+          7
+        ],
+        [
+          "base",
+          26798,
+          5357
+        ]
+      ]
+    }
+  }
+}
